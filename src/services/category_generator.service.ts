@@ -47,6 +47,7 @@ export class CategoryGeneratorService {
         title_ar: 'أحدث الإصدارات الحصرية',
         category_type: 'new_releases',
         order_by: 'release_date.desc.nullslast',
+        filter_query: 'release_date=gte.2024-01-01',
         sort_order: 3,
       },
 
@@ -238,7 +239,7 @@ export class CategoryGeneratorService {
     query = query.not('title', 'is', null).neq('title', '').neq('title', 'Untitled');
 
     if (cat.genre_id) {
-      query = query.contains('genres_json', [{ id: cat.genre_id }]);
+      query = query.filter('genres_json', 'cs', `[{"id":${cat.genre_id}}]`);
     }
 
     if (cat.filter_query) {
@@ -263,7 +264,7 @@ export class CategoryGeneratorService {
 
     const { count, error } = await query;
     if (error) {
-      console.error(`[CATEGORY_GEN] Error counting for "${cat.id}":`, error.message);
+      console.error(`[CATEGORY_GEN] Error counting for "${cat.id}":`, error.message || error);
       return 0;
     }
     return count ?? 0;
