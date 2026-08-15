@@ -1,5 +1,5 @@
-# Step 1: Build stage
-FROM node:20-alpine AS builder
+# Step 1: Build stage (Node.js 22 LTS with native WebSocket support)
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY src ./src
 RUN npm run build
 
 # Step 2: Production runtime stage
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
