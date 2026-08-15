@@ -9,7 +9,6 @@ export interface CategoryDefinition {
   title_ar: string;
   category_type: 'trending' | 'top10' | 'new_releases' | 'genre' | 'thematic' | 'era' | 'curated' | 'studio';
   genre_id?: number;
-  keyword_tag?: string;
   order_by?: string;
   filter_query?: string;
   sort_order: number;
@@ -475,9 +474,9 @@ export class CategoryGeneratorService {
         title_ar: cat.title_ar,
         category_type: cat.category_type,
         genre_id: cat.genre_id || null,
-        keyword_tag: cat.keyword_tag || null,
         order_by: cat.order_by || 'popularity.desc',
         filter_query: cat.filter_query || null,
+        movie_count: movieCount,
         sort_order: currentSortOrder++,
         is_active: true,
         updated_at: new Date().toISOString(),
