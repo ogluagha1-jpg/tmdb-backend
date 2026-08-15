@@ -28,11 +28,11 @@ export class CategorizerService {
     const supabase = SupabaseService.getClient();
     console.log(`[CATEGORIZER] Starting movie metadata enrichment scan (batch size: ${batchSize})...`);
 
-    // 1. Fetch movies that are missing genres_json, keywords, or tmdb_id
+    // 1. Fetch movies that are missing genres_json or tmdb_id
     const { data: movies, error } = await supabase
       .from('movies')
-      .select('id, title, tmdb_id, year, release_date, genres_json, keywords_json, poster_path, backdrop_path, title_ar')
-      .or('genres_json.is.null,genres_json.eq.[],tmdb_id.is.null,keywords_json.is.null')
+      .select('id, title, tmdb_id, year, release_date, genres_json, poster_path, backdrop_path, title_ar')
+      .or('genres_json.is.null,genres_json.eq.[],tmdb_id.is.null')
       .limit(batchSize);
 
     if (error) {
@@ -128,7 +128,6 @@ export class CategorizerService {
           tmdb_id: tmdbDetails.id,
           tmdb_title: tmdbDetails.title,
           genres_json: genresJson,
-          keywords_json: keywordsJson,
           overview: tmdbDetails.overview || '',
           runtime: tmdbDetails.runtime,
           vote_average: tmdbDetails.vote_average,
