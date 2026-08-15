@@ -260,7 +260,7 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":178464}],studios_json.cs.[{"id":87858}],studios_json.cs.[{"id":114144}])',
+        filter_query: 'or=(studios_json.cs.[{"id":178464}],studios_json.cs.[{"id":87858}],studios_json.cs.[{"id":114144}],studios_json.cs.[{"id":67412}],keywords_json.cs.[{"id":207317}],keywords_json.cs.[{"id":210024}])',
         sort_order: 23,
       },
       {
@@ -270,7 +270,7 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":420}],studios_json.cs.[{"id":7505}],studios_json.cs.[{"id":32353}])',
+        filter_query: 'or=(studios_json.cs.[{"id":420}],studios_json.cs.[{"id":7505}],studios_json.cs.[{"id":32353}],studios_json.cs.[{"id":11106}],keywords_json.cs.[{"id":180547}],keywords_json.cs.[{"id":9715}],keywords_json.cs.[{"id":849}])',
         sort_order: 24,
       },
       {
