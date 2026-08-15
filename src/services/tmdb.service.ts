@@ -11,6 +11,13 @@ export interface TmdbKeyword {
   name: string;
 }
 
+export interface TmdbProductionCompany {
+  id: number;
+  name: string;
+  logo_path?: string;
+  origin_country?: string;
+}
+
 export interface TmdbMovieDetails {
   id: number;
   imdb_id?: string;
@@ -27,6 +34,7 @@ export interface TmdbMovieDetails {
   tagline?: string;
   original_language?: string;
   genres?: TmdbGenre[];
+  production_companies?: TmdbProductionCompany[];
   keywords?: {
     keywords?: TmdbKeyword[];
   };

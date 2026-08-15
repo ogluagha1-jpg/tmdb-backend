@@ -28,11 +28,11 @@ export class CategorizerService {
     const supabase = SupabaseService.getClient();
     console.log(`[CATEGORIZER] Starting movie metadata enrichment scan (batch size: ${batchSize})...`);
 
-    // 1. Fetch movies that are missing genres_json, keywords_json, or tmdb_id
+    // 1. Fetch movies that are missing genres_json, keywords_json, studios_json, or tmdb_id
     const { data: movies, error } = await supabase
       .from('movies')
-      .select('id, title, tmdb_id, year, release_date, genres_json, keywords_json, poster_path, backdrop_path, title_ar')
-      .or('genres_json.is.null,genres_json.eq.[],tmdb_id.is.null,keywords_json.is.null,keywords_json.eq.[]')
+      .select('id, title, tmdb_id, year, release_date, genres_json, keywords_json, studios_json, poster_path, backdrop_path, title_ar')
+      .or('genres_json.is.null,genres_json.eq.[],tmdb_id.is.null,keywords_json.is.null,keywords_json.eq.[],studios_json.is.null,studios_json.eq.[]')
       .limit(batchSize);
 
     if (error) {
@@ -119,6 +119,14 @@ export class CategorizerService {
           name: k.name,
         }));
 
+        // Standardize production studios / companies
+        const studiosJson = (tmdbDetails.production_companies || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          logo_path: s.logo_path || null,
+          origin_country: s.origin_country || null,
+        }));
+
         // Extract release year
         const releaseDate = tmdbDetails.release_date || movie.release_date || '';
         const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : movie.year;
@@ -129,6 +137,7 @@ export class CategorizerService {
           tmdb_title: tmdbDetails.title,
           genres_json: genresJson,
           keywords_json: keywordsJson,
+          studios_json: studiosJson,
           overview: tmdbDetails.overview || '',
           runtime: tmdbDetails.runtime,
           vote_average: tmdbDetails.vote_average,

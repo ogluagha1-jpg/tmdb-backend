@@ -6,7 +6,7 @@ export interface CategoryDefinition {
   id: string;
   title: string;
   title_ar: string;
-  category_type: 'trending' | 'top10' | 'new_releases' | 'genre' | 'thematic' | 'era' | 'curated';
+  category_type: 'trending' | 'top10' | 'new_releases' | 'genre' | 'thematic' | 'era' | 'curated' | 'studio';
   genre_id?: number;
   keyword_tag?: string;
   order_by?: string;
@@ -251,6 +251,138 @@ export class CategoryGeneratorService {
         filter_query: 'release_date=gte.1990-01-01&release_date=lte.1999-12-31',
         sort_order: 22,
       },
+
+      // 5. Studio & Production Company Collections
+      {
+        id: 'studio_marvel',
+        title: 'MARVEL STUDIOS & CINEMATIC UNIVERSE',
+        title_ar: 'روائع عالم مارفل السينمائي',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":420}]',
+        sort_order: 23,
+      },
+      {
+        id: 'studio_warner',
+        title: 'WARNER BROS. PICTURES',
+        title_ar: 'روائع وارنر برذرز بيكتشرز',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":174}]',
+        sort_order: 24,
+      },
+      {
+        id: 'studio_universal',
+        title: 'UNIVERSAL PICTURES',
+        title_ar: 'روائع يونيفرسال بيكتشرز',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":33}]',
+        sort_order: 25,
+      },
+      {
+        id: 'studio_paramount',
+        title: 'PARAMOUNT PICTURES',
+        title_ar: 'أفلام باراماونت بيكتشرز',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":4}]',
+        sort_order: 26,
+      },
+      {
+        id: 'studio_sony',
+        title: 'SONY & COLUMBIA PICTURES',
+        title_ar: 'روائع سوني وكولومبيا بيكتشرز',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":5}]',
+        sort_order: 27,
+      },
+      {
+        id: 'studio_disney',
+        title: 'WALT DISNEY PICTURES',
+        title_ar: 'روائع وسحر والت ديزني',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":2}]',
+        sort_order: 28,
+      },
+      {
+        id: 'studio_20th_century',
+        title: '20TH CENTURY STUDIOS',
+        title_ar: 'أفلام تونتيث سينشري ستوديوز',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":127928}]',
+        sort_order: 29,
+      },
+      {
+        id: 'studio_a24',
+        title: 'A24 INDEPENDENT MASTERPIECES',
+        title_ar: 'روائع سينما A24 المستقلة',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'vote_average.desc',
+        filter_query: 'studios_json=cs.[{"id":41077}]',
+        sort_order: 30,
+      },
+      {
+        id: 'studio_lionsgate',
+        title: 'LIONSGATE FILMS',
+        title_ar: 'أفلام لايونزغيت وإنتاجاتها',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":1632}]',
+        sort_order: 31,
+      },
+      {
+        id: 'studio_legendary',
+        title: 'LEGENDARY PICTURES',
+        title_ar: 'ملاحم ليجندري بيكتشرز',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":923}]',
+        sort_order: 32,
+      },
+      {
+        id: 'studio_blumhouse',
+        title: 'BLUMHOUSE HORROR PRODUCTIONS',
+        title_ar: 'عالم رعب بلمهوس برودكشنز',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":3172}]',
+        sort_order: 33,
+      },
+      {
+        id: 'studio_pixar',
+        title: 'PIXAR ANIMATION STUDIOS',
+        title_ar: 'روائع بيكسار للرسوم المتحركة',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'vote_average.desc',
+        filter_query: 'studios_json=cs.[{"id":3}]',
+        sort_order: 34,
+      },
+      {
+        id: 'studio_ghibli',
+        title: 'STUDIO GHIBLI CLASSICS',
+        title_ar: 'روائع استوديو غيبلي اليابانية',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'vote_average.desc',
+        filter_query: 'studios_json=cs.[{"id":10342}]',
+        sort_order: 35,
+      },
     ];
   }
 
@@ -282,6 +414,12 @@ export class CategoryGeneratorService {
         } else if (pair.startsWith('release_date=lte.')) {
           const val = pair.replace('release_date=lte.', '');
           query = query.lte('release_date', val);
+        } else if (pair.startsWith('studios_json=cs.')) {
+          const val = pair.replace('studios_json=cs.', '');
+          query = query.filter('studios_json', 'cs', val);
+        } else if (pair.startsWith('keywords_json=cs.')) {
+          const val = pair.replace('keywords_json=cs.', '');
+          query = query.filter('keywords_json', 'cs', val);
         }
       }
     }
