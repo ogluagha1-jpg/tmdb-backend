@@ -160,6 +160,16 @@ export function renderDashboardHtml(): string {
       transform: scale(0.97);
     }
 
+    .btn-emerald {
+      background: linear-gradient(135deg, #10B981, #059669);
+      color: white;
+      box-shadow: 0 3px 12px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-emerald:active {
+      transform: scale(0.97);
+    }
+
     .btn-secondary {
       background: rgba(255, 255, 255, 0.05);
       border-color: var(--border-subtle);
@@ -301,7 +311,7 @@ export function renderDashboardHtml(): string {
     .table-container {
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
-      max-height: 420px;
+      max-height: 480px;
       border-radius: 8px;
     }
 
@@ -310,7 +320,7 @@ export function renderDashboardHtml(): string {
       border-collapse: collapse;
       font-size: 12px;
       text-align: left;
-      min-width: 600px;
+      min-width: 620px;
     }
 
     th {
@@ -339,6 +349,100 @@ export function renderDashboardHtml(): string {
       font-size: 10px;
       font-weight: 600;
       white-space: nowrap;
+    }
+
+    .btn-delete {
+      background: rgba(239, 68, 68, 0.1);
+      color: #EF4444;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-delete:hover {
+      background: rgba(239, 68, 68, 0.25);
+      color: white;
+    }
+
+    /* Modal Dialog */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      padding: 16px;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: #161B22;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 520px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      transform: scale(0.95);
+      transition: transform 0.2s ease;
+    }
+
+    .modal-overlay.active .modal-card {
+      transform: scale(1);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: white;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .form-input:focus, .form-select:focus {
+      border-color: var(--crimson);
     }
 
     /* Mobile Responsive Optimizations */
@@ -440,7 +544,7 @@ export function renderDashboardHtml(): string {
       transform: translateY(20px);
       transition: all 0.25s ease;
       pointer-events: none;
-      z-index: 100;
+      z-index: 300;
       text-align: center;
     }
 
@@ -459,7 +563,7 @@ export function renderDashboardHtml(): string {
           <div class="brand-logo">TERAFLIX</div>
           <div>
             <h1 class="brand-title">Metrics Engine</h1>
-            <p class="brand-subtitle">TMDB Backend Health & Categorization</p>
+            <p class="brand-subtitle">TMDB Backend Health & Discovery</p>
           </div>
         </div>
       </div>
@@ -468,8 +572,9 @@ export function renderDashboardHtml(): string {
           <div class="status-dot"></div>
           <span id="server-status-text">Server Active</span>
         </div>
+        <button class="btn btn-emerald" onclick="openCreateModal()">➕ Create Shelf</button>
         <button class="btn btn-secondary" onclick="fetchMetrics()">🔄 Refresh</button>
-        <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">📁 Categories</button>
+        <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">📁 Auto-Scan</button>
         <button class="btn btn-primary" style="grid-column: span 2;" onclick="triggerMovieSync()">⚡ Trigger Enrichment (100)</button>
       </div>
     </header>
@@ -602,7 +707,7 @@ export function renderDashboardHtml(): string {
       <div class="card-title-row">
         <div>
           <h2 style="font-size: 15px; font-weight: 800;">Studio Hub Live Counters</h2>
-          <p class="card-desc">Available titles for each studio watermark card</p>
+          <p class="card-desc">Titles accessible via Studio Hub watermark cards</p>
         </div>
       </div>
       <div class="studios-grid" id="studios-container">
@@ -634,12 +739,57 @@ export function renderDashboardHtml(): string {
               <th>Type</th>
               <th>Live Titles</th>
               <th>Status</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody id="categories-tbody">
             <!-- Injected via JavaScript -->
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-Time Category Creation Modal -->
+  <div id="create-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 class="modal-title">➕ Create New Live Shelf</h2>
+        <button style="background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;" onclick="closeCreateModal()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Choose Preset Theme (Optional)</label>
+        <select class="form-select" id="input-preset" onchange="applyPreset()">
+          <option value="">-- Custom Shelf --</option>
+          <option value="heist" data-title="HIGH-STAKES HEISTS & ROBBERIES" data-title-ar="عمليات السرقة الكبرى والمطاردات" data-query='or=(keywords_json.cs.[{"name":"heist"}],keywords_json.cs.[{"name":"robbery"}])'>Heists & Bank Robberies (194 titles)</option>
+          <option value="timetravel" data-title="TIME TRAVEL & ALTERNATE REALITIES" data-title-ar="عوالم السفر عبر الزمن" data-query='or=(keywords_json.cs.[{"name":"time travel"}],keywords_json.cs.[{"name":"time loop"}])'>Time Travel & Multiverse (146 titles)</option>
+          <option value="survival" data-title="SURVIVAL & POST-APOCALYPTIC" data-title-ar="صراع البقاء ونهاية العالم" data-query='or=(keywords_json.cs.[{"name":"survival"}],keywords_json.cs.[{"name":"post-apocalyptic"}])'>Survival & Dystopia (362 titles)</option>
+          <option value="martialarts" data-title="MARTIAL ARTS & COMBAT MASTERS" data-title-ar="فنون القتال والمواجهات الملحمية" data-query='or=(keywords_json.cs.[{"name":"martial arts"}],keywords_json.cs.[{"name":"kung fu"}])'>Martial Arts & Kung Fu (315 titles)</option>
+          <option value="truestory" data-title="INSPIRED BY TRUE EVENTS" data-title-ar="مقتبس من أحداث وقصص حقيقية" data-query='or=(keywords_json.cs.[{"name":"based on true story"}],keywords_json.cs.[{"name":"biography"}])'>Based on True Events (763 titles)</option>
+          <option value="spy" data-title="ESPIONAGE & SECRET AGENTS" data-title-ar="عالم الجواسيس والاستخبارات" data-query='or=(keywords_json.cs.[{"name":"spy"}],keywords_json.cs.[{"name":"secret agent"}])'>Spy & Espionage (236 titles)</option>
+          <option value="masterpieces" data-title="CINEMA MASTERPIECES (8.5+)" data-title-ar="أعظم روائع السينما العالمية" data-query="vote_average=gte.8.5">Highest Rated Masterpieces (8.5+)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">English Title</label>
+        <input type="text" class="form-input" id="input-title" placeholder="e.g. CYBERPUNK DYSTOPIA">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Arabic Localized Title</label>
+        <input type="text" class="form-input" id="input-title-ar" placeholder="e.g. روائع الخيال المستقبلي" style="direction:rtl;">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Filter Query (PostgREST)</label>
+        <input type="text" class="form-input" id="input-query" placeholder='e.g. keywords_json.cs.[{"name":"time travel"}]'>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button class="btn btn-secondary" style="flex: 1;" onclick="closeCreateModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex: 2;" onclick="submitCreateCategory()">⚡ Test & Publish Shelf</button>
       </div>
     </div>
   </div>
@@ -652,6 +802,70 @@ export function renderDashboardHtml(): string {
       toast.innerText = msg;
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    function openCreateModal() {
+      document.getElementById('create-modal').classList.add('active');
+    }
+
+    function closeCreateModal() {
+      document.getElementById('create-modal').classList.remove('active');
+    }
+
+    function applyPreset() {
+      const select = document.getElementById('input-preset');
+      const opt = select.options[select.selectedIndex];
+      if (opt && opt.dataset.title) {
+        document.getElementById('input-title').value = opt.dataset.title;
+        document.getElementById('input-title-ar').value = opt.dataset.titleAr || '';
+        document.getElementById('input-query').value = opt.dataset.query || '';
+      }
+    }
+
+    async function submitCreateCategory() {
+      const title = document.getElementById('input-title').value.trim();
+      const title_ar = document.getElementById('input-title-ar').value.trim();
+      const filter_query = document.getElementById('input-query').value.trim();
+
+      if (!title || !filter_query) {
+        showToast('⚠️ Please provide Title and Filter Query.');
+        return;
+      }
+
+      showToast('Testing & creating category...');
+      try {
+        const res = await fetch('/api/categories/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            title_ar,
+            filter_query,
+            category_type: 'thematic',
+            order_by: 'popularity.desc'
+          })
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.error);
+
+        showToast('🎉 Published "' + title + '" with ' + result.count + ' titles!');
+        closeCreateModal();
+        fetchMetrics();
+      } catch (err) {
+        showToast('❌ Failed: ' + err.message);
+      }
+    }
+
+    async function deleteCategory(id, name) {
+      if (!confirm('Are you sure you want to delete shelf "' + name + '"?')) return;
+      try {
+        const res = await fetch('/api/categories/' + id, { method: 'DELETE' });
+        const result = await res.json();
+        showToast('🗑️ Deleted ' + name);
+        fetchMetrics();
+      } catch (err) {
+        showToast('❌ Delete failed: ' + err.message);
+      }
     }
 
     async function fetchMetrics() {
@@ -739,6 +953,9 @@ export function renderDashboardHtml(): string {
           <td><span style="text-transform:uppercase; font-size:10px; opacity:0.8;">\${c.category_type}</span></td>
           <td><strong style="color:#10B981;">\${(c.movie_count || 0).toLocaleString()} titles</strong></td>
           <td><span class="pill-published">Live</span></td>
+          <td>
+            <button class="btn-delete" onclick="deleteCategory('\${c.id}', '\${c.title.replace(/'/g, "\\\\'")}')">🗑️</button>
+          </td>
         \`;
         tbody.appendChild(tr);
       });

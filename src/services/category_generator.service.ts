@@ -21,7 +21,7 @@ export class CategoryGeneratorService {
     this.tmdb = new TmdbService();
   }
 
-  /// All potential category candidates to test against database catalogue (No studio categories)
+  /// All potential category candidates to test against database catalogue
   private getCandidateCategories(): CategoryDefinition[] {
     return [
       // 1. Trending & Rankings
@@ -78,7 +78,69 @@ export class CategoryGeneratorService {
         sort_order: 5,
       },
 
-      // 3. Major Genres (Clean, Non-duplicated)
+      // 3. High-Impact Thematic Collections
+      {
+        id: 'thematic_true_events',
+        title: 'INSPIRED BY TRUE EVENTS',
+        title_ar: 'مقتبس من أحداث وقصص حقيقية',
+        category_type: 'thematic',
+        genre_id: 0,
+        order_by: 'vote_average.desc',
+        filter_query: 'or=(keywords_json.cs.[{"name":"based on true story"}],keywords_json.cs.[{"name":"biography"}],keywords_json.cs.[{"name":"historical figure"}])',
+        sort_order: 6,
+      },
+      {
+        id: 'thematic_survival',
+        title: 'SURVIVAL & POST-APOCALYPTIC',
+        title_ar: 'صراع البقاء ونهاية العالم',
+        category_type: 'thematic',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'or=(keywords_json.cs.[{"name":"survival"}],keywords_json.cs.[{"name":"post-apocalyptic"}],keywords_json.cs.[{"name":"dystopia"}])',
+        sort_order: 7,
+      },
+      {
+        id: 'thematic_martial_arts',
+        title: 'MARTIAL ARTS & COMBAT MASTERS',
+        title_ar: 'فنون القتال والمواجهات الملحمية',
+        category_type: 'thematic',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'or=(keywords_json.cs.[{"name":"martial arts"}],keywords_json.cs.[{"name":"kung fu"}],keywords_json.cs.[{"name":"ninja"}])',
+        sort_order: 8,
+      },
+      {
+        id: 'thematic_spy',
+        title: 'ESPIONAGE & SECRET AGENTS',
+        title_ar: 'عالم الجواسيس والاستخبارات',
+        category_type: 'thematic',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'or=(keywords_json.cs.[{"name":"spy"}],keywords_json.cs.[{"name":"secret agent"}],keywords_json.cs.[{"name":"assassin"}])',
+        sort_order: 9,
+      },
+      {
+        id: 'thematic_heist',
+        title: 'HIGH-STAKES HEISTS & ROBBERIES',
+        title_ar: 'عمليات السرقة الكبرى والمطاردات',
+        category_type: 'thematic',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'or=(keywords_json.cs.[{"name":"heist"}],keywords_json.cs.[{"name":"robbery"}],keywords_json.cs.[{"name":"bank robbery"}])',
+        sort_order: 10,
+      },
+      {
+        id: 'thematic_timetravel',
+        title: 'TIME TRAVEL & ALTERNATE REALITIES',
+        title_ar: 'عوالم السفر عبر الزمن',
+        category_type: 'thematic',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'or=(keywords_json.cs.[{"name":"time travel"}],keywords_json.cs.[{"name":"time loop"}],keywords_json.cs.[{"name":"alternate reality"}])',
+        sort_order: 11,
+      },
+
+      // 4. Major Genres
       {
         id: 'genre_action',
         title: 'ADRENALINE RUSH: ACTION & COMBAT',
@@ -87,7 +149,7 @@ export class CategoryGeneratorService {
         genre_id: 28,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":28}]',
-        sort_order: 6,
+        sort_order: 12,
       },
       {
         id: 'genre_scifi',
@@ -97,7 +159,7 @@ export class CategoryGeneratorService {
         genre_id: 878,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":878}]',
-        sort_order: 7,
+        sort_order: 13,
       },
       {
         id: 'genre_comedy',
@@ -107,7 +169,7 @@ export class CategoryGeneratorService {
         genre_id: 35,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":35}]',
-        sort_order: 8,
+        sort_order: 14,
       },
       {
         id: 'genre_horror',
@@ -117,7 +179,7 @@ export class CategoryGeneratorService {
         genre_id: 27,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":27}]',
-        sort_order: 9,
+        sort_order: 15,
       },
       {
         id: 'genre_crime_thriller',
@@ -127,7 +189,7 @@ export class CategoryGeneratorService {
         genre_id: 80,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":80}]',
-        sort_order: 10,
+        sort_order: 16,
       },
       {
         id: 'genre_animation_family',
@@ -137,7 +199,7 @@ export class CategoryGeneratorService {
         genre_id: 16,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":16}]',
-        sort_order: 11,
+        sort_order: 17,
       },
       {
         id: 'genre_adventure',
@@ -147,7 +209,7 @@ export class CategoryGeneratorService {
         genre_id: 12,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":12}]',
-        sort_order: 12,
+        sort_order: 18,
       },
       {
         id: 'genre_drama',
@@ -157,7 +219,7 @@ export class CategoryGeneratorService {
         genre_id: 18,
         order_by: 'vote_average.desc',
         filter_query: 'genres_json=cs.[{"id":18}]',
-        sort_order: 13,
+        sort_order: 19,
       },
       {
         id: 'genre_mystery',
@@ -167,7 +229,7 @@ export class CategoryGeneratorService {
         genre_id: 9648,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":9648}]',
-        sort_order: 14,
+        sort_order: 20,
       },
       {
         id: 'genre_romance',
@@ -177,7 +239,7 @@ export class CategoryGeneratorService {
         genre_id: 10749,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":10749}]',
-        sort_order: 15,
+        sort_order: 21,
       },
       {
         id: 'genre_fantasy',
@@ -187,7 +249,7 @@ export class CategoryGeneratorService {
         genre_id: 14,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":14}]',
-        sort_order: 16,
+        sort_order: 22,
       },
       {
         id: 'genre_history_war',
@@ -197,7 +259,7 @@ export class CategoryGeneratorService {
         genre_id: 10752,
         order_by: 'vote_average.desc',
         filter_query: 'genres_json=cs.[{"id":10752}]',
-        sort_order: 17,
+        sort_order: 23,
       },
       {
         id: 'genre_documentary',
@@ -207,10 +269,10 @@ export class CategoryGeneratorService {
         genre_id: 99,
         order_by: 'popularity.desc',
         filter_query: 'genres_json=cs.[{"id":99}]',
-        sort_order: 18,
+        sort_order: 24,
       },
 
-      // 4. Era-Based Collections
+      // 5. Era-Based Collections
       {
         id: 'era_2020s',
         title: 'MODERN BLOCKBUSTERS (2020 - 2026)',
@@ -219,7 +281,7 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'popularity.desc',
         filter_query: 'release_date=gte.2020-01-01',
-        sort_order: 19,
+        sort_order: 25,
       },
       {
         id: 'era_2010s',
@@ -229,7 +291,7 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'release_date=gte.2010-01-01&release_date=lte.2019-12-31',
-        sort_order: 20,
+        sort_order: 26,
       },
       {
         id: 'era_2000s',
@@ -239,7 +301,7 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'release_date=gte.2000-01-01&release_date=lte.2009-12-31',
-        sort_order: 21,
+        sort_order: 27,
       },
       {
         id: 'era_90s',
@@ -249,25 +311,20 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'release_date=gte.1990-01-01&release_date=lte.1999-12-31',
-        sort_order: 22,
+        sort_order: 28,
       },
     ];
   }
 
-  /// Counts the actual available movies in Supabase for a given category candidate via REST
-  private async countMoviesForCategory(cat: CategoryDefinition): Promise<number> {
+  /// Counts the actual available movies in Supabase for a custom filter query via REST
+  async countQueryForFilter(filterQuery: string): Promise<number> {
     try {
       const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
-      const base = `${env.SUPABASE_URL}/rest/v1/movies?select=id`;
-      let queryUrl = base;
+      let queryUrl = `${env.SUPABASE_URL}/rest/v1/movies?select=id`;
 
-      if (cat.genre_id && cat.genre_id > 0) {
-        queryUrl += `&genres_json=cs.[{"id":${cat.genre_id}}]`;
-      }
-
-      if (cat.filter_query) {
+      if (filterQuery) {
         // Strip order= or limit= for counting
-        const parts = cat.filter_query.split('&').filter((p) => !p.startsWith('order=') && !p.startsWith('limit='));
+        const parts = filterQuery.split('&').filter((p) => !p.startsWith('order=') && !p.startsWith('limit='));
         if (parts.length > 0) {
           queryUrl += `&${parts.join('&')}`;
         }
@@ -289,6 +346,19 @@ export class CategoryGeneratorService {
         return isNaN(total) ? 0 : total;
       }
       return 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /// Counts the actual available movies in Supabase for a given category candidate via REST
+  private async countMoviesForCategory(cat: CategoryDefinition): Promise<number> {
+    try {
+      let filter = cat.filter_query || '';
+      if (cat.genre_id && cat.genre_id > 0) {
+        filter = filter ? `${filter}&genres_json=cs.[{"id":${cat.genre_id}}]` : `genres_json=cs.[{"id":${cat.genre_id}}]`;
+      }
+      return await this.countQueryForFilter(filter);
     } catch (err: any) {
       console.error(`[CATEGORY_GEN] Error counting for "${cat.id}":`, err.message);
       return 0;

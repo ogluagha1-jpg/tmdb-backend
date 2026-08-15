@@ -80,6 +80,57 @@ app.post('/api/sync/categories', async (_req: Request, res: Response) => {
   }
 });
 
+// 7. Admin Real-Time Category Creator
+app.post('/api/categories/create', async (req: Request, res: Response) => {
+  try {
+    const { title, title_ar, filter_query, category_type, order_by } = req.body;
+    if (!title || !filter_query) {
+      return res.status(400).json({ success: false, error: 'English Title and Filter Query are required.' });
+    }
+
+    const count = await generator.countQueryForFilter(filter_query);
+    if (count < 1) {
+      return res.status(400).json({ success: false, error: `No movies in database match filter: ${filter_query}` });
+    }
+
+    const id = 'custom_' + title.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 30);
+    const supabase = SupabaseService.getClient();
+    const { data, error } = await supabase
+      .from('home_categories')
+      .upsert({
+        id,
+        title: title.toUpperCase(),
+        title_ar: title_ar || null,
+        category_type: category_type || 'thematic',
+        filter_query,
+        order_by: order_by || 'popularity.desc',
+        movie_count: count,
+        sort_order: 99,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .select();
+
+    if (error) throw error;
+    res.status(200).json({ success: true, count, category: data?.[0] });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 8. Admin Real-Time Category Deletion
+app.delete('/api/categories/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const supabase = SupabaseService.getClient();
+    const { error } = await supabase.from('home_categories').delete().eq('id', id);
+    if (error) throw error;
+    res.status(200).json({ success: true, message: `Category "${id}" deleted successfully.` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 app.listen(port, () => {
