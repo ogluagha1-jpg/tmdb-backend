@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { SupabaseService } from './supabase.service';
 import { TmdbService } from './tmdb.service';
 import { env } from '../config/env';
@@ -162,7 +163,7 @@ export class CategoryGeneratorService {
       {
         id: 'genre_mystery',
         title: 'MYSTERY & SUSPENSE THRILLERS',
-        title_ar: 'أسرار معقدة وتشويق غامض',
+        title_ar: 'ألغاز مشوقة وإثارة نفسية',
         category_type: 'genre',
         genre_id: 9648,
         order_by: 'popularity.desc',
@@ -172,7 +173,7 @@ export class CategoryGeneratorService {
       {
         id: 'genre_romance',
         title: 'ROMANTIC STORIES & PASSION',
-        title_ar: 'الرومانسية والقصص العاطفية',
+        title_ar: 'قصص الحب والرومانسية',
         category_type: 'genre',
         genre_id: 10749,
         order_by: 'popularity.desc',
@@ -182,7 +183,7 @@ export class CategoryGeneratorService {
       {
         id: 'genre_fantasy',
         title: 'MYTHICAL REALMS & FANTASY',
-        title_ar: 'عوالم السحر والفانتازيا الملحمية',
+        title_ar: 'عوالم السحر والخيال الأسطوري',
         category_type: 'genre',
         genre_id: 14,
         order_by: 'popularity.desc',
@@ -190,9 +191,9 @@ export class CategoryGeneratorService {
         sort_order: 16,
       },
       {
-        id: 'genre_war_history',
+        id: 'genre_history_war',
         title: 'HISTORICAL EPICS & WAR HEROES',
-        title_ar: 'المعارك الحربية والملاحم التاريخية',
+        title_ar: 'حروب تاريخية وملاحم كبرى',
         category_type: 'genre',
         genre_id: 10752,
         order_by: 'vote_average.desc',
@@ -202,7 +203,7 @@ export class CategoryGeneratorService {
       {
         id: 'genre_documentary',
         title: 'FASCINATING DOCUMENTARIES',
-        title_ar: 'الوثائقيات الملهمة والحقائق',
+        title_ar: 'وثائقيات تكشف أسرار العالم',
         category_type: 'genre',
         genre_id: 99,
         order_by: 'popularity.desc',
@@ -210,11 +211,11 @@ export class CategoryGeneratorService {
         sort_order: 18,
       },
 
-      // 4. Era & Decade Collections
+      // 4. Era-Based Collections
       {
         id: 'era_2020s',
         title: 'MODERN BLOCKBUSTERS (2020 - 2026)',
-        title_ar: 'سينما العقد الحالي الحديثة',
+        title_ar: 'أقوى إنتاجات العقد الحالي',
         category_type: 'era',
         genre_id: 0,
         order_by: 'popularity.desc',
@@ -224,7 +225,7 @@ export class CategoryGeneratorService {
       {
         id: 'era_2010s',
         title: 'PEAK 2010s CINEMA GEMS',
-        title_ar: 'روائع عقد 2010 التي لا تُنسى',
+        title_ar: 'روائع عقد 2010 الذهبي',
         category_type: 'era',
         genre_id: 0,
         order_by: 'vote_average.desc',
@@ -234,7 +235,7 @@ export class CategoryGeneratorService {
       {
         id: 'era_2000s',
         title: '2000s NOSTALGIA HITS',
-        title_ar: 'ذكريات أفلام الألفية المبكرة',
+        title_ar: 'نوستالجيا روائع الألفينات',
         category_type: 'era',
         genre_id: 0,
         order_by: 'vote_average.desc',
@@ -260,7 +261,7 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":178464}]',
+        filter_query: 'or=(studios_json.cs.[{"id":178464}],studios_json.cs.[{"id":87858}],studios_json.cs.[{"id":114144}])',
         sort_order: 23,
       },
       {
@@ -270,7 +271,7 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":420}]',
+        filter_query: 'or=(studios_json.cs.[{"id":420}],studios_json.cs.[{"id":7505}],studios_json.cs.[{"id":32353}])',
         sort_order: 24,
       },
       {
@@ -280,8 +281,8 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":174}]',
-        sort_order: 24,
+        filter_query: 'or=(studios_json.cs.[{"id":174}],studios_json.cs.[{"id":429}],studios_json.cs.[{"id":9993}],studios_json.cs.[{"id":12}],studios_json.cs.[{"id":923}])',
+        sort_order: 25,
       },
       {
         id: 'studio_universal',
@@ -290,8 +291,8 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":33}]',
-        sort_order: 25,
+        filter_query: 'or=(studios_json.cs.[{"id":33}],studios_json.cs.[{"id":67}],studios_json.cs.[{"id":33413}],studios_json.cs.[{"id":10338}],studios_json.cs.[{"id":3172}])',
+        sort_order: 26,
       },
       {
         id: 'studio_paramount',
@@ -300,8 +301,8 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":4}]',
-        sort_order: 26,
+        filter_query: 'or=(studios_json.cs.[{"id":4}],studios_json.cs.[{"id":24955}],studios_json.cs.[{"id":2348}],studios_json.cs.[{"id":8302}])',
+        sort_order: 27,
       },
       {
         id: 'studio_sony',
@@ -310,8 +311,8 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":5}]',
-        sort_order: 27,
+        filter_query: 'or=(studios_json.cs.[{"id":5}],studios_json.cs.[{"id":34}],studios_json.cs.[{"id":84}],studios_json.cs.[{"id":2251}])',
+        sort_order: 28,
       },
       {
         id: 'studio_disney',
@@ -320,8 +321,8 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":2}]',
-        sort_order: 28,
+        filter_query: 'or=(studios_json.cs.[{"id":2}],studios_json.cs.[{"id":6125}],studios_json.cs.[{"id":3}],studios_json.cs.[{"id":1}],studios_json.cs.[{"id":5218}])',
+        sort_order: 29,
       },
       {
         id: 'studio_20th_century',
@@ -330,8 +331,8 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":127928}]',
-        sort_order: 29,
+        filter_query: 'or=(studios_json.cs.[{"id":127928}],studios_json.cs.[{"id":25}],studios_json.cs.[{"id":787}],studios_json.cs.[{"id":9383}],studios_json.cs.[{"id":127929}])',
+        sort_order: 30,
       },
       {
         id: 'studio_a24',
@@ -341,7 +342,7 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'studios_json=cs.[{"id":41077}]',
-        sort_order: 30,
+        sort_order: 31,
       },
       {
         id: 'studio_lionsgate',
@@ -350,8 +351,8 @@ export class CategoryGeneratorService {
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":1632}]',
-        sort_order: 31,
+        filter_query: 'or=(studios_json.cs.[{"id":1632}],studios_json.cs.[{"id":35}],studios_json.cs.[{"id":10221}])',
+        sort_order: 32,
       },
       {
         id: 'studio_legendary',
@@ -361,95 +362,90 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'popularity.desc',
         filter_query: 'studios_json=cs.[{"id":923}]',
-        sort_order: 32,
+        sort_order: 33,
       },
       {
         id: 'studio_blumhouse',
         title: 'BLUMHOUSE HORROR PRODUCTIONS',
-        title_ar: 'عالم رعب بلمهوس برودكشنز',
+        title_ar: 'روائع رعب استوديوهات بلمهوس',
         category_type: 'studio',
         genre_id: 0,
         order_by: 'popularity.desc',
         filter_query: 'studios_json=cs.[{"id":3172}]',
-        sort_order: 33,
+        sort_order: 34,
       },
       {
         id: 'studio_pixar',
         title: 'PIXAR ANIMATION STUDIOS',
-        title_ar: 'روائع بيكسار للرسوم المتحركة',
+        title_ar: 'روائع وإبداعات استوديوهات بيكسار',
         category_type: 'studio',
         genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'studios_json=cs.[{"id":3}]',
-        sort_order: 34,
+        sort_order: 35,
       },
       {
         id: 'studio_ghibli',
         title: 'STUDIO GHIBLI CLASSICS',
-        title_ar: 'روائع استوديو غيبلي اليابانية',
+        title_ar: 'كلاسيكيات وتحف استوديو غيبلي',
         category_type: 'studio',
         genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'studios_json=cs.[{"id":10342}]',
-        sort_order: 35,
+        sort_order: 36,
+      },
+      {
+        id: 'studio_amazon',
+        title: 'AMAZON MGM STUDIOS',
+        title_ar: 'أفلام أمازون إم جي إم',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'or=(studios_json.cs.[{"id":20580}],studios_json.cs.[{"id":21}],studios_json.cs.[{"id":8411}],studios_json.cs.[{"id":155700}])',
+        sort_order: 37,
       },
     ];
   }
 
-  /// Counts the actual available movies in Supabase for a given category candidate
+  /// Counts the actual available movies in Supabase for a given category candidate via REST
   private async countMoviesForCategory(cat: CategoryDefinition): Promise<number> {
-    const supabase = SupabaseService.getClient();
-    let query = supabase.from('movies').select('id', { count: 'exact', head: true });
+    try {
+      const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
+      const base = `${env.SUPABASE_URL}/rest/v1/movies?select=id`;
+      let queryUrl = base;
 
-    // Enforce valid streamable content
-    query = query.not('title', 'is', null).neq('title', '').neq('title', 'Untitled');
+      if (cat.genre_id && cat.genre_id > 0) {
+        queryUrl += `&genres_json=cs.[{"id":${cat.genre_id}}]`;
+      }
 
-    if (cat.genre_id && cat.genre_id > 0) {
-      query = query.filter('genres_json', 'cs', `[{"id":${cat.genre_id}}]`);
-    }
-
-    if (cat.filter_query) {
-      // Parse basic filter queries
-      const pairs = cat.filter_query.split('&');
-      for (const pair of pairs) {
-        if (pair.startsWith('vote_average=gte.')) {
-          const val = parseFloat(pair.replace('vote_average=gte.', ''));
-          query = query.gte('vote_average', val);
-        } else if (pair.startsWith('original_language=eq.')) {
-          const val = pair.replace('original_language=eq.', '');
-          query = query.eq('original_language', val);
-        } else if (pair.startsWith('release_date=gte.')) {
-          const val = pair.replace('release_date=gte.', '');
-          query = query.gte('release_date', val);
-        } else if (pair.startsWith('release_date=lte.')) {
-          const val = pair.replace('release_date=lte.', '');
-          query = query.lte('release_date', val);
-        } else if (pair.startsWith('studios_json=cs.')) {
-          const val = pair.replace('studios_json=cs.', '');
-          try {
-            const parsed = JSON.parse(val);
-            query = query.contains('studios_json', parsed);
-          } catch (_) {
-            query = query.filter('studios_json', 'cs', val);
-          }
-        } else if (pair.startsWith('keywords_json=cs.')) {
-          const val = pair.replace('keywords_json=cs.', '');
-          try {
-            const parsed = JSON.parse(val);
-            query = query.contains('keywords_json', parsed);
-          } catch (_) {
-            query = query.filter('keywords_json', 'cs', val);
-          }
+      if (cat.filter_query) {
+        // Strip order= or limit= for counting
+        const parts = cat.filter_query.split('&').filter((p) => !p.startsWith('order=') && !p.startsWith('limit='));
+        if (parts.length > 0) {
+          queryUrl += `&${parts.join('&')}`;
         }
       }
-    }
 
-    const { count, error } = await query;
-    if (error) {
-      console.error(`[CATEGORY_GEN] Error counting for "${cat.id}":`, JSON.stringify(error));
+      const res = await axios.get(queryUrl, {
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          Range: '0-0',
+          Prefer: 'count=exact',
+        },
+        timeout: 5000,
+      });
+
+      const range = res.headers['content-range'];
+      if (range) {
+        const total = parseInt(range.split('/')[1], 10);
+        return isNaN(total) ? 0 : total;
+      }
+      return 0;
+    } catch (err: any) {
+      console.error(`[CATEGORY_GEN] Error counting for "${cat.id}":`, err.message);
       return 0;
     }
-    return count ?? 0;
   }
 
   /// Regenerates the home_categories table in Supabase with verified non-empty categories
@@ -478,44 +474,37 @@ export class CategoryGeneratorService {
         title: cat.title,
         title_ar: cat.title_ar,
         category_type: cat.category_type,
-        genre_id: cat.genre_id ?? 0,
-        order_by: cat.order_by ?? 'popularity.desc',
-        filter_query: cat.filter_query ?? '',
-        movie_count: movieCount,
+        genre_id: cat.genre_id || null,
+        keyword_tag: cat.keyword_tag || null,
+        order_by: cat.order_by || 'popularity.desc',
+        filter_query: cat.filter_query || null,
         sort_order: currentSortOrder++,
         is_active: true,
         updated_at: new Date().toISOString(),
       });
+
       console.log(`[CATEGORY_GEN] ✓ Approved "${cat.title}" (${movieCount} titles)`);
     }
 
     if (validCategoriesToPublish.length === 0) {
-      console.warn('[CATEGORY_GEN] No categories met the minimum threshold criteria.');
+      console.warn('[CATEGORY_GEN] No valid categories met the threshold. Keeping existing table unchanged.');
       return { totalCandidates: candidates.length, published: 0 };
     }
 
-    // Upsert published categories into home_categories table
+    // Atomic Upsert: Replace or update existing categories
     const { error: upsertErr } = await supabase
       .from('home_categories')
       .upsert(validCategoriesToPublish, { onConflict: 'id' });
 
     if (upsertErr) {
-      console.error('[CATEGORY_GEN] Failed to upsert home_categories:', upsertErr.message);
-    } else {
-      // Deactivate any categories in DB that are no longer in our published list
-      const publishedIds = validCategoriesToPublish.map((c) => c.id);
-      const { error: deactivateErr } = await supabase
-        .from('home_categories')
-        .update({ is_active: false })
-        .not('id', 'in', `(${publishedIds.join(',')})`);
-
-      if (deactivateErr) {
-        console.warn('[CATEGORY_GEN] Error deactivating stale categories:', deactivateErr.message);
-      }
-
-      console.log(`[CATEGORY_GEN] 🎉 Successfully published ${validCategoriesToPublish.length} active home categories!`);
+      console.error('[CATEGORY_GEN] Failed to publish home categories:', upsertErr.message);
+      throw upsertErr;
     }
 
-    return { totalCandidates: candidates.length, published: validCategoriesToPublish.length };
+    console.log(`[CATEGORY_GEN] 🎉 Successfully published ${validCategoriesToPublish.length} active home categories!`);
+    return {
+      totalCandidates: candidates.length,
+      published: validCategoriesToPublish.length,
+    };
   }
 }
