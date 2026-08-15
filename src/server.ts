@@ -61,8 +61,9 @@ app.get('/api/categories', async (_req: Request, res: Response) => {
 // 5. Admin Trigger: Manual Movie Categorization Sync
 app.post('/api/sync/movies', async (req: Request, res: Response) => {
   try {
-    const batchSize = parseInt(req.query.batch as string, 10) || 50;
-    const result = await categorizer.syncUncategorizedMovies(batchSize);
+    const batchSize = parseInt(req.query.batch as string, 10) || 100;
+    const offset = parseInt(req.query.offset as string, 10) || 0;
+    const result = await categorizer.syncUncategorizedMovies(batchSize, offset);
     res.status(200).json({ success: true, result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

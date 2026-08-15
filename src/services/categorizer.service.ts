@@ -182,16 +182,20 @@ export class CategorizerService {
   }
 
   /// Scans and enriches un-categorized or newly added movies in the Supabase database with parallel execution
-  async syncUncategorizedMovies(batchSize: number = 100): Promise<{ processed: number; updated: number }> {
+  async syncUncategorizedMovies(
+    batchSize: number = 100,
+    offset: number = 0
+  ): Promise<{ processed: number; updated: number }> {
     const supabase = SupabaseService.getClient();
-    console.log(`[CATEGORIZER] Starting movie metadata enrichment scan (batch size: ${batchSize})...`);
 
-    // 1. Fetch movies that are missing genres_json, keywords_json, studios_json, or tmdb_id
+    // Fetch batch using range pagination to guarantee we cover all 10,244 movies
     const { data: movies, error } = await supabase
       .from('movies')
-      .select('id, title, tmdb_id, year, release_date, genres_json, keywords_json, studios_json, poster_path, backdrop_path, title_ar')
-      .or('genres_json.is.null,genres_json.eq.[],tmdb_id.is.null,keywords_json.is.null,keywords_json.eq.[],studios_json.is.null,studios_json.eq.[]')
-      .limit(batchSize);
+      .select(
+        'id, title, tmdb_id, year, release_date, genres_json, keywords_json, studios_json, poster_path, backdrop_path, title_ar'
+      )
+      .order('id', { ascending: true })
+      .range(offset, offset + batchSize - 1);
 
     if (error) {
       console.error('[CATEGORIZER] Error querying movies from Supabase:', error.message);
@@ -199,34 +203,55 @@ export class CategorizerService {
     }
 
     if (!movies || movies.length === 0) {
-      console.log('[CATEGORIZER] All movies in database are up to date and categorized!');
       return { processed: 0, updated: 0 };
     }
 
-    console.log(`[CATEGORIZER] Found ${movies.length} movies needing enrichment. Processing with concurrency = 10...`);
-    
+    // Filter to movies that actually need enrichment (missing studios, arabic, keywords, or cast)
+    const needsEnrichment = movies.filter((m: any) => {
+      const hasStudios = Array.isArray(m.studios_json) && m.studios_json.length > 0;
+      const hasKeywords = Array.isArray(m.keywords_json) && m.keywords_json.length > 0;
+      const hasArabic = !!m.title_ar && m.title_ar.trim().length > 0;
+      return !hasStudios || !hasKeywords || !hasArabic || !m.tmdb_id;
+    });
+
+    if (needsEnrichment.length === 0) {
+      return { processed: movies.length, updated: 0 };
+    }
+
+    console.log(
+      `[CATEGORIZER] [Offset ${offset}] Found ${needsEnrichment.length}/${movies.length} movies needing enrichment. Processing with concurrency = 10...`
+    );
+
     // Process in parallel batches of 10
-    const results = await this.pMap(movies, 10, (movie) => this.enrichMovie(movie, supabase));
+    const results = await this.pMap(needsEnrichment, 10, (movie) =>
+      this.enrichMovie(movie, supabase)
+    );
     const updatedCount = results.filter(Boolean).length;
 
-    console.log(`[CATEGORIZER] Enrichment batch finished: ${updatedCount}/${movies.length} successfully updated.`);
+    console.log(
+      `[CATEGORIZER] [Offset ${offset}] Enrichment finished: ${updatedCount}/${needsEnrichment.length} successfully updated.`
+    );
     return { processed: movies.length, updated: updatedCount };
   }
 
-  /// Continuously scans and enriches all uncategorized movies in the database
-  async startContinuousEnrichment(maxBatches: number = 300): Promise<void> {
-    console.log('[CATEGORIZER] 🚀 Starting high-speed continuous movie categorization pipeline...');
+  /// Continuously scans and enriches all movies across the entire database catalogue
+  async startContinuousEnrichment(batchSize: number = 100): Promise<void> {
+    console.log('[CATEGORIZER] 🚀 Starting catalogue-wide movie categorization pipeline...');
     let totalUpdated = 0;
-    for (let batch = 0; batch < maxBatches; batch++) {
-      const res = await this.syncUncategorizedMovies(100);
+    let offset = 0;
+
+    while (true) {
+      const res = await this.syncUncategorizedMovies(batchSize, offset);
       if (res.processed === 0) {
-        console.log('[CATEGORIZER] 🎉 All movies in database have been categorized!');
+        console.log(`[CATEGORIZER] 🎉 Full catalogue scan complete! Total updated: ${totalUpdated}`);
         break;
       }
       totalUpdated += res.updated;
-      console.log(`[CATEGORIZER] Pipeline progress: ${totalUpdated} total movies categorized.`);
+      offset += res.processed;
+      console.log(`[CATEGORIZER] Pipeline progress: scanned ${offset}/10244 movies | ${totalUpdated} updated.`);
+
       // Short breather delay between batches
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 300));
     }
   }
 }
