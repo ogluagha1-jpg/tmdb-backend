@@ -74,7 +74,23 @@ app.listen(port, () => {
 
   // Run initial category evaluation on boot
   console.log('[BOOT] Running initial dynamic categories scan...');
-  generator.generateAndSyncCategories().catch((e) => {
-    console.error('[BOOT] Initial category scan failed:', e.message);
-  });
+  generator
+    .generateAndSyncCategories()
+    .then(() => {
+      // Start background continuous movie enrichment pipeline
+      categorizer
+        .startContinuousEnrichment(200)
+        .then(() => {
+          console.log('[BOOT] Enrichment pass finished. Refreshing home categories...');
+          generator.generateAndSyncCategories().catch((err) => {
+            console.error('[BOOT] Refresh categories failed:', err.message);
+          });
+        })
+        .catch((e) => {
+          console.error('[BOOT] Continuous enrichment error:', e.message);
+        });
+    })
+    .catch((e) => {
+      console.error('[BOOT] Initial category scan failed:', e.message);
+    });
 });

@@ -177,4 +177,21 @@ export class CategorizerService {
     console.log(`[CATEGORIZER] Enrichment batch finished: ${updatedCount}/${movies.length} updated.`);
     return { processed: movies.length, updated: updatedCount };
   }
+
+  /// Continuously scans and enriches all uncategorized movies in the database
+  async startContinuousEnrichment(maxBatches: number = 100): Promise<void> {
+    console.log('[CATEGORIZER] 🚀 Starting continuous background movie categorization pipeline...');
+    let totalUpdated = 0;
+    for (let batch = 0; batch < maxBatches; batch++) {
+      const res = await this.syncUncategorizedMovies(50);
+      if (res.processed === 0) {
+        console.log('[CATEGORIZER] 🎉 All movies in database have been categorized!');
+        break;
+      }
+      totalUpdated += res.updated;
+      console.log(`[CATEGORIZER] Pipeline progress: ${totalUpdated} movies categorized so far.`);
+      // Small breather delay between batches
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
 }
