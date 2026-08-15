@@ -30,7 +30,9 @@ export class CategoryGeneratorService {
         title: 'TOP 10 MOVIES TODAY',
         title_ar: 'أفضل 10 أفلام اليوم',
         category_type: 'top10',
+        genre_id: 0,
         order_by: 'popularity.desc',
+        filter_query: 'order=popularity.desc&limit=10',
         sort_order: 1,
       },
       {
@@ -38,7 +40,9 @@ export class CategoryGeneratorService {
         title: 'TRENDING NOW',
         title_ar: 'الأكثر رواجاً الآن',
         category_type: 'trending',
+        genre_id: 0,
         order_by: 'popularity.desc',
+        filter_query: 'order=popularity.desc',
         sort_order: 2,
       },
       {
@@ -46,6 +50,7 @@ export class CategoryGeneratorService {
         title: 'NEW RELEASES (2025 - 2026)',
         title_ar: 'أحدث الإصدارات الحصرية',
         category_type: 'new_releases',
+        genre_id: 0,
         order_by: 'release_date.desc.nullslast',
         filter_query: 'release_date=gte.2024-01-01',
         sort_order: 3,
@@ -57,6 +62,7 @@ export class CategoryGeneratorService {
         title: 'CRITICALLY ACCLAIMED & TOP RATED',
         title_ar: 'أعلى الأفلام تقييماً عالمياً',
         category_type: 'curated',
+        genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'vote_average=gte.8.0',
         sort_order: 4,
@@ -66,6 +72,7 @@ export class CategoryGeneratorService {
         title: 'ARABIC CINEMA & REGIONAL HITS',
         title_ar: 'السينما العربية وروائع الشرق',
         category_type: 'curated',
+        genre_id: 0,
         order_by: 'popularity.desc',
         filter_query: 'original_language=eq.ar',
         sort_order: 5,
@@ -79,6 +86,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 28,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":28}]',
         sort_order: 6,
       },
       {
@@ -88,6 +96,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 878,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":878}]',
         sort_order: 7,
       },
       {
@@ -97,6 +106,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 35,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":35}]',
         sort_order: 8,
       },
       {
@@ -106,6 +116,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 27,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":27}]',
         sort_order: 9,
       },
       {
@@ -115,6 +126,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 80,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":80}]',
         sort_order: 10,
       },
       {
@@ -124,6 +136,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 16,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":16}]',
         sort_order: 11,
       },
       {
@@ -133,6 +146,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 12,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":12}]',
         sort_order: 12,
       },
       {
@@ -142,6 +156,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 18,
         order_by: 'vote_average.desc',
+        filter_query: 'genres_json=cs.[{"id":18}]',
         sort_order: 13,
       },
       {
@@ -151,6 +166,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 9648,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":9648}]',
         sort_order: 14,
       },
       {
@@ -160,6 +176,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 10749,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":10749}]',
         sort_order: 15,
       },
       {
@@ -169,6 +186,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 14,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":14}]',
         sort_order: 16,
       },
       {
@@ -178,6 +196,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 10752,
         order_by: 'vote_average.desc',
+        filter_query: 'genres_json=cs.[{"id":10752}]',
         sort_order: 17,
       },
       {
@@ -187,6 +206,7 @@ export class CategoryGeneratorService {
         category_type: 'genre',
         genre_id: 99,
         order_by: 'popularity.desc',
+        filter_query: 'genres_json=cs.[{"id":99}]',
         sort_order: 18,
       },
 
@@ -196,6 +216,7 @@ export class CategoryGeneratorService {
         title: 'MODERN BLOCKBUSTERS (2020 - 2026)',
         title_ar: 'سينما العقد الحالي الحديثة',
         category_type: 'era',
+        genre_id: 0,
         order_by: 'popularity.desc',
         filter_query: 'release_date=gte.2020-01-01',
         sort_order: 19,
@@ -205,6 +226,7 @@ export class CategoryGeneratorService {
         title: 'PEAK 2010s CINEMA GEMS',
         title_ar: 'روائع عقد 2010 التي لا تُنسى',
         category_type: 'era',
+        genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'release_date=gte.2010-01-01&release_date=lte.2019-12-31',
         sort_order: 20,
@@ -214,6 +236,7 @@ export class CategoryGeneratorService {
         title: '2000s NOSTALGIA HITS',
         title_ar: 'ذكريات أفلام الألفية المبكرة',
         category_type: 'era',
+        genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'release_date=gte.2000-01-01&release_date=lte.2009-12-31',
         sort_order: 21,
@@ -223,6 +246,7 @@ export class CategoryGeneratorService {
         title: 'GOLDEN 90s LEGENDARY CLASSICS',
         title_ar: 'كلاسيكيات التسعينات الذهبية',
         category_type: 'era',
+        genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'release_date=gte.1990-01-01&release_date=lte.1999-12-31',
         sort_order: 22,
@@ -238,7 +262,7 @@ export class CategoryGeneratorService {
     // Enforce valid streamable content
     query = query.not('title', 'is', null).neq('title', '').neq('title', 'Untitled');
 
-    if (cat.genre_id) {
+    if (cat.genre_id && cat.genre_id > 0) {
       query = query.filter('genres_json', 'cs', `[{"id":${cat.genre_id}}]`);
     }
 
@@ -296,9 +320,9 @@ export class CategoryGeneratorService {
         title: cat.title,
         title_ar: cat.title_ar,
         category_type: cat.category_type,
-        genre_id: cat.genre_id ?? null,
+        genre_id: cat.genre_id ?? 0,
         order_by: cat.order_by ?? 'popularity.desc',
-        filter_query: cat.filter_query ?? null,
+        filter_query: cat.filter_query ?? '',
         movie_count: movieCount,
         sort_order: currentSortOrder++,
         is_active: true,
