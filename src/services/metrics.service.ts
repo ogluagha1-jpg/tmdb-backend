@@ -143,12 +143,12 @@ export class MetricsService {
 
     // 3. Studio Counts
     const studioDefinitions = [
-      { id: 'netflix', name: 'Netflix Originals', nameAr: 'إنتاجات نتفليكس', query: 'or=(studios_json.cs.[{"id":178464}],studios_json.cs.[{"id":87858}],studios_json.cs.[{"id":114144}],studios_json.cs.[{"id":67412}],keywords_json.cs.[{"id":207317}],keywords_json.cs.[{"id":210024}])', color: '#E50914' },
+      { id: 'netflix', name: 'Netflix Originals', nameAr: 'إنتاجات نتفليكس', query: 'or=(studios_json.cs.[{"id":178464}],studios_json.cs.[{"id":87858}],studios_json.cs.[{"id":114144}],studios_json.cs.[{"id":67412}],studios_json.cs.[{"id":118451}],studios_json.cs.[{"id":155877}])', color: '#E50914' },
       { id: 'warner', name: 'Warner Bros. Pictures', nameAr: 'وارنر برذرز', query: 'or=(studios_json.cs.[{"id":174}],studios_json.cs.[{"id":429}],studios_json.cs.[{"id":9993}],studios_json.cs.[{"id":12}],studios_json.cs.[{"id":923}])', color: '#0055A5' },
       { id: 'universal', name: 'Universal Pictures', nameAr: 'يونيفرسال', query: 'or=(studios_json.cs.[{"id":33}],studios_json.cs.[{"id":67}],studios_json.cs.[{"id":33413}],studios_json.cs.[{"id":10338}],studios_json.cs.[{"id":3172}])', color: '#0B72B9' },
       { id: 'sony', name: 'Sony & Columbia', nameAr: 'سوني وكولومبيا', query: 'or=(studios_json.cs.[{"id":5}],studios_json.cs.[{"id":34}],studios_json.cs.[{"id":84}],studios_json.cs.[{"id":2251}])', color: '#3A75C4' },
       { id: 'paramount', name: 'Paramount Pictures', nameAr: 'باراماونت', query: 'or=(studios_json.cs.[{"id":4}],studios_json.cs.[{"id":24955}],studios_json.cs.[{"id":2348}],studios_json.cs.[{"id":8302}])', color: '#0064B0' },
-      { id: 'marvel', name: 'Marvel Studios', nameAr: 'مارفل ستوديوز', query: 'or=(studios_json.cs.[{"id":420}],studios_json.cs.[{"id":7505}],studios_json.cs.[{"id":32353}],studios_json.cs.[{"id":11106}],keywords_json.cs.[{"id":180547}],keywords_json.cs.[{"id":9715}],keywords_json.cs.[{"id":849}])', color: '#ED1D24' },
+      { id: 'marvel', name: 'Marvel Studios', nameAr: 'مارفل ستوديوز', query: 'or=(studios_json.cs.[{"id":420}],studios_json.cs.[{"id":7505}],studios_json.cs.[{"id":32353}],studios_json.cs.[{"id":11106}],studios_json.cs.[{"id":13252}])', color: '#ED1D24' },
       { id: 'disney', name: 'Walt Disney Pictures', nameAr: 'ديزني', query: 'or=(studios_json.cs.[{"id":2}],studios_json.cs.[{"id":6125}],studios_json.cs.[{"id":3}],studios_json.cs.[{"id":1}],studios_json.cs.[{"id":5218}])', color: '#1B60C4' },
       { id: '20th_century', name: '20th Century Studios', nameAr: 'توينتيث سينشري', query: 'or=(studios_json.cs.[{"id":127928}],studios_json.cs.[{"id":25}],studios_json.cs.[{"id":787}],studios_json.cs.[{"id":9383}],studios_json.cs.[{"id":127929}])', color: '#DCA227' },
       { id: 'lionsgate', name: 'Lionsgate Films', nameAr: 'لايونزغيت', query: 'or=(studios_json.cs.[{"id":1632}],studios_json.cs.[{"id":35}],studios_json.cs.[{"id":10221}])', color: '#9B51E0' },
