@@ -7,7 +7,7 @@ export interface CategoryDefinition {
   id: string;
   title: string;
   title_ar: string;
-  category_type: 'trending' | 'top10' | 'new_releases' | 'genre' | 'thematic' | 'era' | 'curated' | 'studio';
+  category_type: 'trending' | 'top10' | 'new_releases' | 'genre' | 'thematic' | 'era' | 'curated';
   genre_id?: number;
   order_by?: string;
   filter_query?: string;
@@ -21,7 +21,7 @@ export class CategoryGeneratorService {
     this.tmdb = new TmdbService();
   }
 
-  /// All potential category candidates to test against database catalogue
+  /// All potential category candidates to test against database catalogue (No studio categories)
   private getCandidateCategories(): CategoryDefinition[] {
     return [
       // 1. Trending & Rankings
@@ -78,7 +78,7 @@ export class CategoryGeneratorService {
         sort_order: 5,
       },
 
-      // 3. Major Genres
+      // 3. Major Genres (Clean, Non-duplicated)
       {
         id: 'genre_action',
         title: 'ADRENALINE RUSH: ACTION & COMBAT',
@@ -251,158 +251,6 @@ export class CategoryGeneratorService {
         filter_query: 'release_date=gte.1990-01-01&release_date=lte.1999-12-31',
         sort_order: 22,
       },
-
-      // 5. Studio & Production Company Collections
-      {
-        id: 'studio_netflix',
-        title: 'NETFLIX ORIGINALS & EXCLUSIVES',
-        title_ar: 'روائع وإنتاجات نتفليكس الأصلية',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":178464}],studios_json.cs.[{"id":87858}],studios_json.cs.[{"id":114144}],studios_json.cs.[{"id":67412}],studios_json.cs.[{"id":118451}],studios_json.cs.[{"id":155877}])',
-        sort_order: 23,
-      },
-      {
-        id: 'studio_marvel',
-        title: 'MARVEL STUDIOS & CINEMATIC UNIVERSE',
-        title_ar: 'روائع عالم مارفل السينمائي',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":420}],studios_json.cs.[{"id":7505}],studios_json.cs.[{"id":32353}],studios_json.cs.[{"id":11106}],studios_json.cs.[{"id":13252}])',
-        sort_order: 24,
-      },
-      {
-        id: 'studio_warner',
-        title: 'WARNER BROS. PICTURES',
-        title_ar: 'روائع وارنر برذرز بيكتشرز',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":174}],studios_json.cs.[{"id":429}],studios_json.cs.[{"id":9993}],studios_json.cs.[{"id":12}],studios_json.cs.[{"id":923}])',
-        sort_order: 25,
-      },
-      {
-        id: 'studio_universal',
-        title: 'UNIVERSAL PICTURES',
-        title_ar: 'روائع يونيفرسال بيكتشرز',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":33}],studios_json.cs.[{"id":67}],studios_json.cs.[{"id":33413}],studios_json.cs.[{"id":10338}],studios_json.cs.[{"id":3172}])',
-        sort_order: 26,
-      },
-      {
-        id: 'studio_paramount',
-        title: 'PARAMOUNT PICTURES',
-        title_ar: 'أفلام باراماونت بيكتشرز',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":4}],studios_json.cs.[{"id":24955}],studios_json.cs.[{"id":2348}],studios_json.cs.[{"id":8302}])',
-        sort_order: 27,
-      },
-      {
-        id: 'studio_sony',
-        title: 'SONY & COLUMBIA PICTURES',
-        title_ar: 'روائع سوني وكولومبيا بيكتشرز',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":5}],studios_json.cs.[{"id":34}],studios_json.cs.[{"id":84}],studios_json.cs.[{"id":2251}])',
-        sort_order: 28,
-      },
-      {
-        id: 'studio_disney',
-        title: 'WALT DISNEY PICTURES',
-        title_ar: 'روائع وسحر والت ديزني',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":2}],studios_json.cs.[{"id":6125}],studios_json.cs.[{"id":3}],studios_json.cs.[{"id":1}],studios_json.cs.[{"id":5218}])',
-        sort_order: 29,
-      },
-      {
-        id: 'studio_20th_century',
-        title: '20TH CENTURY STUDIOS',
-        title_ar: 'أفلام تونتيث سينشري ستوديوز',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":127928}],studios_json.cs.[{"id":25}],studios_json.cs.[{"id":787}],studios_json.cs.[{"id":9383}],studios_json.cs.[{"id":127929}])',
-        sort_order: 30,
-      },
-      {
-        id: 'studio_a24',
-        title: 'A24 INDEPENDENT MASTERPIECES',
-        title_ar: 'روائع سينما A24 المستقلة',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'vote_average.desc',
-        filter_query: 'studios_json=cs.[{"id":41077}]',
-        sort_order: 31,
-      },
-      {
-        id: 'studio_lionsgate',
-        title: 'LIONSGATE FILMS',
-        title_ar: 'أفلام لايونزغيت وإنتاجاتها',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":1632}],studios_json.cs.[{"id":35}],studios_json.cs.[{"id":10221}])',
-        sort_order: 32,
-      },
-      {
-        id: 'studio_legendary',
-        title: 'LEGENDARY PICTURES',
-        title_ar: 'ملاحم ليجندري بيكتشرز',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":923}]',
-        sort_order: 33,
-      },
-      {
-        id: 'studio_blumhouse',
-        title: 'BLUMHOUSE HORROR PRODUCTIONS',
-        title_ar: 'روائع رعب استوديوهات بلمهوس',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'studios_json=cs.[{"id":3172}]',
-        sort_order: 34,
-      },
-      {
-        id: 'studio_pixar',
-        title: 'PIXAR ANIMATION STUDIOS',
-        title_ar: 'روائع وإبداعات استوديوهات بيكسار',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'vote_average.desc',
-        filter_query: 'studios_json=cs.[{"id":3}]',
-        sort_order: 35,
-      },
-      {
-        id: 'studio_ghibli',
-        title: 'STUDIO GHIBLI CLASSICS',
-        title_ar: 'كلاسيكيات وتحف استوديو غيبلي',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'vote_average.desc',
-        filter_query: 'studios_json=cs.[{"id":10342}]',
-        sort_order: 36,
-      },
-      {
-        id: 'studio_amazon',
-        title: 'AMAZON MGM STUDIOS',
-        title_ar: 'أفلام أمازون إم جي إم',
-        category_type: 'studio',
-        genre_id: 0,
-        order_by: 'popularity.desc',
-        filter_query: 'or=(studios_json.cs.[{"id":20580}],studios_json.cs.[{"id":21}],studios_json.cs.[{"id":8411}],studios_json.cs.[{"id":155700}])',
-        sort_order: 37,
-      },
     ];
   }
 
@@ -490,7 +338,13 @@ export class CategoryGeneratorService {
       return { totalCandidates: candidates.length, published: 0 };
     }
 
-    // Atomic Upsert: Replace or update existing categories
+    // Clean up any obsolete studio categories and duplicate rows from Supabase
+    try {
+      await supabase.from('home_categories').delete().eq('category_type', 'studio');
+      await supabase.from('home_categories').delete().eq('id', 'genre_war_history');
+    } catch (_) {}
+
+    // Atomic Upsert: Replace or update existing clean categories
     const { error: upsertErr } = await supabase
       .from('home_categories')
       .upsert(validCategoriesToPublish, { onConflict: 'id' });
