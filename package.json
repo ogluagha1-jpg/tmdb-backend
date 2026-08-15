@@ -1,6 +1,6 @@
 {
   "name": "teraflix-categorization-service",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Automated TMDB/IMDb movie categorization and dynamic home categories generator for Teraflix",
   "main": "dist/server.js",
   "scripts": {
