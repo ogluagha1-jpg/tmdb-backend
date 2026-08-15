@@ -254,6 +254,16 @@ export class CategoryGeneratorService {
 
       // 5. Studio & Production Company Collections
       {
+        id: 'studio_netflix',
+        title: 'NETFLIX ORIGINALS & EXCLUSIVES',
+        title_ar: 'روائع وإنتاجات نتفليكس الأصلية',
+        category_type: 'studio',
+        genre_id: 0,
+        order_by: 'popularity.desc',
+        filter_query: 'studios_json=cs.[{"id":178464}]',
+        sort_order: 23,
+      },
+      {
         id: 'studio_marvel',
         title: 'MARVEL STUDIOS & CINEMATIC UNIVERSE',
         title_ar: 'روائع عالم مارفل السينمائي',
@@ -261,7 +271,7 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'popularity.desc',
         filter_query: 'studios_json=cs.[{"id":420}]',
-        sort_order: 23,
+        sort_order: 24,
       },
       {
         id: 'studio_warner',
