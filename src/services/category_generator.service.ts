@@ -416,17 +416,27 @@ export class CategoryGeneratorService {
           query = query.lte('release_date', val);
         } else if (pair.startsWith('studios_json=cs.')) {
           const val = pair.replace('studios_json=cs.', '');
-          query = query.filter('studios_json', 'cs', val);
+          try {
+            const parsed = JSON.parse(val);
+            query = query.contains('studios_json', parsed);
+          } catch (_) {
+            query = query.filter('studios_json', 'cs', val);
+          }
         } else if (pair.startsWith('keywords_json=cs.')) {
           const val = pair.replace('keywords_json=cs.', '');
-          query = query.filter('keywords_json', 'cs', val);
+          try {
+            const parsed = JSON.parse(val);
+            query = query.contains('keywords_json', parsed);
+          } catch (_) {
+            query = query.filter('keywords_json', 'cs', val);
+          }
         }
       }
     }
 
     const { count, error } = await query;
     if (error) {
-      console.error(`[CATEGORY_GEN] Error counting for "${cat.id}":`, error.message || error);
+      console.error(`[CATEGORY_GEN] Error counting for "${cat.id}":`, JSON.stringify(error));
       return 0;
     }
     return count ?? 0;
