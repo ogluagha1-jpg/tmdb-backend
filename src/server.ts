@@ -84,7 +84,30 @@ app.post('/api/sync/movies', async (req: Request, res: Response) => {
   }
 });
 
-// 6. Admin Trigger: Manual Home Category Regeneration
+// 6. Admin Trigger: Re-initiate Full Catalogue Scan from Beginning (Offset 0)
+app.post('/api/sync/restart', async (req: Request, res: Response) => {
+  try {
+    const force = req.query.force === 'true';
+    categorizer.startContinuousEnrichment(100, force).then(() => {
+      generator.generateAndSyncCategories().catch(console.error);
+    });
+
+    res.status(200).json({
+      success: true,
+      message: '🚀 Full catalogue scan from beginning (Offset 0 to 10,244) re-initiated successfully!',
+      status: categorizer.scanStatus,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Admin Check: Live Scan Progress Status
+app.get('/api/sync/status', (_req: Request, res: Response) => {
+  res.status(200).json({ success: true, status: categorizer.scanStatus });
+});
+
+// 8. Admin Trigger: Manual Home Category Regeneration
 app.post('/api/sync/categories', async (_req: Request, res: Response) => {
   try {
     const result = await generator.generateAndSyncCategories();

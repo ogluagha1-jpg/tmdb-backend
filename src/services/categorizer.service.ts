@@ -1,62 +1,70 @@
+import { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseService } from './supabase.service';
-import { TmdbService } from './tmdb.service';
-import { ImdbService } from './imdb.service';
+import { TmdbService, TmdbMovieDetails } from './tmdb.service';
+import { env } from '../config/env';
+
+export interface ScanStatus {
+  isRunning: boolean;
+  currentOffset: number;
+  totalMovies: number;
+  updatedCount: number;
+  startTime?: string;
+  lastBatchTime?: string;
+}
 
 export class CategorizerService {
   private tmdb: TmdbService;
-  private imdb: ImdbService;
+  public scanStatus: ScanStatus = {
+    isRunning: false,
+    currentOffset: 0,
+    totalMovies: 10244,
+    updatedCount: 0,
+  };
 
   constructor() {
     this.tmdb = new TmdbService();
-    this.imdb = new ImdbService();
   }
 
-  /// Clean movie title helper to remove quality tags, year, resolution, etc.
+  /// Cleans and extracts pure search title
   private cleanTitle(rawTitle: string): string {
     if (!rawTitle) return '';
     return rawTitle
-      .replace(/[\(\[\{].*?[\)\]\}]/g, ' ') // Remove brackets
-      .replace(/\b(19\d\d|20\d\d)\b/g, ' ') // Remove years
-      .replace(/\b(4k|2160p|1080p|720p|480p|bluray|web-dl|hdrip|x264|x265|hevc|aac|dts)\b/gi, ' ')
-      .replace(/[._\-+]/g, ' ')
+      .replace(/\s*\(\d{4}\).*$/, '')
+      .replace(/\s*\((TR|NL|PL|DE|FR|ES|IT|UK|BR|US|RU|AR|sub|dub|L|4K|HD|HQ)\b.*?\)/gi, '')
+      .replace(/\[.*?\]/g, '')
       .replace(/\s+/g, ' ')
       .trim();
   }
 
-  /// Helper to process items with controlled concurrency
-  private async pMap<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  /// Concurrency helper (p-map style)
+  private async pMap<T, R>(
+    items: T[],
+    concurrency: number,
+    mapper: (item: T) => Promise<R>
+  ): Promise<R[]> {
     const results: R[] = [];
-    const executing: Promise<any>[] = [];
+    let index = 0;
 
-    for (const item of items) {
-      const p = fn(item).then((res) => results.push(res));
-      executing.push(p);
-
-      if (executing.length >= limit) {
-        await Promise.race(executing);
-        // Remove settled promises
-        for (let i = executing.length - 1; i >= 0; i--) {
-          const isSettled = await Promise.race([executing[i].then(() => true), Promise.resolve(false)]);
-          if (isSettled) executing.splice(i, 1);
-        }
+    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (index < items.length) {
+        const i = index++;
+        results[i] = await mapper(items[i]);
       }
-    }
+    });
 
-    await Promise.all(executing);
+    await Promise.all(workers);
     return results;
   }
 
-  /// Enrich a single movie
-  private async enrichMovie(movie: any, supabase: any): Promise<boolean> {
+  /// Enriches a single movie row with TMDB metadata & Arabic translations
+  private async enrichMovie(movie: any, supabase: SupabaseClient): Promise<boolean> {
     try {
-      let tmdbDetails = null;
-
-      // Try direct fetch if tmdb_id is present
-      if (movie.tmdb_id && movie.tmdb_id > 0) {
+      let tmdbDetails: TmdbMovieDetails | null = null;
+      if (movie.tmdb_id) {
         tmdbDetails = await this.tmdb.getMovieDetails(movie.tmdb_id);
       }
 
-      // Fallback: Search by clean title
+      // If tmdb_id was missing or invalid, search by clean title
       if (!tmdbDetails) {
         const cleaned = this.cleanTitle(movie.title);
         if (cleaned.length > 0) {
@@ -68,11 +76,9 @@ export class CategorizerService {
         return false;
       }
 
-      // Fetch Arabic metadata if not present
+      // Fetch Arabic metadata
       let arMeta: any = {};
-      if (!movie.title_ar) {
-        arMeta = await this.tmdb.getArabicMetadata(tmdbDetails.id);
-      }
+      arMeta = await this.tmdb.getArabicMetadata(tmdbDetails.id);
 
       // Extract director
       let director: string | undefined;
@@ -181,14 +187,15 @@ export class CategorizerService {
     }
   }
 
-  /// Scans and enriches un-categorized or newly added movies in the Supabase database with parallel execution
+  /// Scans and enriches a batch of movies from given offset
   async syncUncategorizedMovies(
     batchSize: number = 100,
-    offset: number = 0
+    offset: number = 0,
+    forceEnrich: boolean = false
   ): Promise<{ processed: number; updated: number }> {
     const supabase = SupabaseService.getClient();
 
-    // Fetch batch using range pagination to guarantee we cover all 10,244 movies
+    // Fetch batch using range pagination
     const { data: movies, error } = await supabase
       .from('movies')
       .select(
@@ -206,52 +213,73 @@ export class CategorizerService {
       return { processed: 0, updated: 0 };
     }
 
-    // Filter to movies that actually need enrichment (missing studios, arabic, keywords, or cast)
-    const needsEnrichment = movies.filter((m: any) => {
-      const hasStudios = Array.isArray(m.studios_json) && m.studios_json.length > 0;
-      const hasKeywords = Array.isArray(m.keywords_json) && m.keywords_json.length > 0;
-      const hasArabic = !!m.title_ar && m.title_ar.trim().length > 0;
-      return !hasStudios || !hasKeywords || !hasArabic || !m.tmdb_id;
-    });
+    // Determine candidates for enrichment
+    const candidates = forceEnrich
+      ? movies
+      : movies.filter((m: any) => {
+          const hasStudios = Array.isArray(m.studios_json) && m.studios_json.length > 0;
+          const hasKeywords = Array.isArray(m.keywords_json) && m.keywords_json.length > 0;
+          const hasArabic = !!m.title_ar && m.title_ar.trim().length > 0;
+          return !hasStudios || !hasKeywords || !hasArabic || !m.tmdb_id;
+        });
 
-    if (needsEnrichment.length === 0) {
+    if (candidates.length === 0) {
       return { processed: movies.length, updated: 0 };
     }
 
     console.log(
-      `[CATEGORIZER] [Offset ${offset}] Found ${needsEnrichment.length}/${movies.length} movies needing enrichment. Processing with concurrency = 10...`
+      `[CATEGORIZER] [Offset ${offset}] Enriching ${candidates.length}/${movies.length} movies (Concurrency: 15)...`
     );
 
-    // Process in parallel batches of 10
-    const results = await this.pMap(needsEnrichment, 10, (movie) =>
+    // Process in parallel batches with concurrency = 15
+    const results = await this.pMap(candidates, 15, (movie) =>
       this.enrichMovie(movie, supabase)
     );
     const updatedCount = results.filter(Boolean).length;
 
     console.log(
-      `[CATEGORIZER] [Offset ${offset}] Enrichment finished: ${updatedCount}/${needsEnrichment.length} successfully updated.`
+      `[CATEGORIZER] [Offset ${offset}] Batch completed: ${updatedCount}/${candidates.length} updated.`
     );
     return { processed: movies.length, updated: updatedCount };
   }
 
-  /// Continuously scans and enriches all movies across the entire database catalogue
-  async startContinuousEnrichment(batchSize: number = 100): Promise<void> {
-    console.log('[CATEGORIZER] 🚀 Starting catalogue-wide movie categorization pipeline...');
-    let totalUpdated = 0;
-    let offset = 0;
+  /// Full Catalogue Rescan from Offset 0 to 10,244
+  async startContinuousEnrichment(batchSize: number = 100, forceEnrich: boolean = false): Promise<void> {
+    if (this.scanStatus.isRunning) {
+      console.log('[CATEGORIZER] ⚠️ A catalogue scan is already in progress.');
+      return;
+    }
 
-    while (true) {
-      const res = await this.syncUncategorizedMovies(batchSize, offset);
-      if (res.processed === 0) {
-        console.log(`[CATEGORIZER] 🎉 Full catalogue scan complete! Total updated: ${totalUpdated}`);
-        break;
+    this.scanStatus.isRunning = true;
+    this.scanStatus.currentOffset = 0;
+    this.scanStatus.updatedCount = 0;
+    this.scanStatus.startTime = new Date().toISOString();
+
+    console.log(`[CATEGORIZER] 🚀 RE-INITIATING FULL CATALOGUE SCAN FROM BEGINNING (Offset 0 to 10,244)...`);
+
+    try {
+      let offset = 0;
+      while (this.scanStatus.isRunning) {
+        const res = await this.syncUncategorizedMovies(batchSize, offset, forceEnrich);
+        if (res.processed === 0) {
+          console.log(`[CATEGORIZER] 🎉 COMPLETE! Full catalogue scan finished. Total updated: ${this.scanStatus.updatedCount}`);
+          break;
+        }
+
+        this.scanStatus.updatedCount += res.updated;
+        offset += res.processed;
+        this.scanStatus.currentOffset = offset;
+        this.scanStatus.lastBatchTime = new Date().toISOString();
+
+        console.log(`[CATEGORIZER] 📈 Progress: #${offset}/${this.scanStatus.totalMovies} (${((offset / this.scanStatus.totalMovies) * 100).toFixed(1)}%) | ${this.scanStatus.updatedCount} updated.`);
+
+        // Short breather
+        await new Promise((r) => setTimeout(r, 200));
       }
-      totalUpdated += res.updated;
-      offset += res.processed;
-      console.log(`[CATEGORIZER] Pipeline progress: scanned ${offset}/10244 movies | ${totalUpdated} updated.`);
-
-      // Short breather delay between batches
-      await new Promise((r) => setTimeout(r, 300));
+    } catch (err: any) {
+      console.error('[CATEGORIZER] Full scan error:', err.message);
+    } finally {
+      this.scanStatus.isRunning = false;
     }
   }
 }
