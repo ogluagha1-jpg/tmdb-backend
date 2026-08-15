@@ -131,6 +131,48 @@ export class CategorizerService {
         origin_country: s.origin_country || null,
       }));
 
+      // Check watch/providers & streaming distributors for Netflix and Apple
+      const providers = (tmdbDetails as any)['watch/providers']?.results || {};
+      const usFlat = (providers.US?.flatrate || []) as any[];
+      const gbFlat = (providers.GB?.flatrate || []) as any[];
+      const allFlat = [...usFlat, ...gbFlat];
+
+      // 1. Netflix detection (Provider ID 8, or "netflix" keyword)
+      const hasNetflixKw = (tmdbDetails.keywords?.keywords || []).some((k: any) =>
+        k.name.toLowerCase().includes('netflix')
+      );
+      const isNetflixProvider = allFlat.some((p: any) =>
+        p.provider_id === 8 || p.provider_name?.toLowerCase().includes('netflix')
+      );
+
+      if (
+        (isNetflixProvider || hasNetflixKw) &&
+        !studiosJson.some((s) => s.id === 178464 || s.name.toLowerCase().includes('netflix'))
+      ) {
+        studiosJson.push({
+          id: 178464,
+          name: 'Netflix',
+          logo_path: '/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg',
+          origin_country: 'US',
+        });
+      }
+
+      // 2. Apple Original Films / Apple TV+ detection (Provider ID 350)
+      const isAppleProvider = allFlat.some((p: any) =>
+        p.provider_id === 350 || p.provider_name?.toLowerCase().includes('apple')
+      );
+      if (
+        isAppleProvider &&
+        !studiosJson.some((s) => s.id === 194232 || s.name.toLowerCase().includes('apple'))
+      ) {
+        studiosJson.push({
+          id: 194232,
+          name: 'Apple Studios',
+          logo_path: '/suaEOtk1916ggMeMiohmqv9ad07.png',
+          origin_country: 'US',
+        });
+      }
+
       // Extract release year
       const releaseDate = tmdbDetails.release_date || movie.release_date || '';
       const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : movie.year;

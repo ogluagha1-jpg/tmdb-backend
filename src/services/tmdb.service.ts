@@ -121,13 +121,13 @@ export class TmdbService {
     }
   }
 
-  /// Fetches comprehensive movie details including keywords, cast, crew, videos, and collection
+  /// Fetches comprehensive movie details including keywords, cast, crew, videos, collection, and watch/providers
   async getMovieDetails(tmdbId: number): Promise<TmdbMovieDetails | null> {
     try {
       await this.delay(100);
       const res = await this.client.get(`/movie/${tmdbId}`, {
         params: {
-          append_to_response: 'keywords,credits,videos',
+          append_to_response: 'keywords,credits,videos,watch/providers',
         },
       });
       return res.data;
