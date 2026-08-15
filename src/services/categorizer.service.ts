@@ -131,22 +131,34 @@ export class CategorizerService {
         origin_country: s.origin_country || null,
       }));
 
-      // Check watch/providers & streaming distributors for Netflix and Apple
-      const providers = (tmdbDetails as any)['watch/providers']?.results || {};
-      const usFlat = (providers.US?.flatrate || []) as any[];
-      const gbFlat = (providers.GB?.flatrate || []) as any[];
-      const allFlat = [...usFlat, ...gbFlat];
-
-      // 1. Netflix detection (Provider ID 8, or "netflix" keyword)
-      const hasNetflixKw = (tmdbDetails.keywords?.keywords || []).some((k: any) =>
-        k.name.toLowerCase().includes('netflix')
+      const prodIds = studiosJson.map((s) => s.id);
+      const allReleases = ((tmdbDetails as any).release_dates?.results || []).flatMap(
+        (r: any) => r.release_dates || []
       );
-      const isNetflixProvider = allFlat.some((p: any) =>
-        p.provider_id === 8 || p.provider_name?.toLowerCase().includes('netflix')
+
+      const MAJOR_THEATRICAL_IDS = [
+        174, 429, 9993, 12, // Warner Bros
+        33, 67, 33413, 10338, // Universal
+        5, 34, 84, 2251, 559, // Sony
+        4, 24955, 2348, 8302, 333, // Paramount
+        2, 6125, 5218, 420, 3, // Disney & Pixar & Marvel
+        25, 127928, 787, 9383, // 20th Century
+        21, 20580, 8411, // MGM
+        1632, 35, 85885, // Lionsgate
+      ];
+
+      const isMajorTheatrical = prodIds.some((id) => MAJOR_THEATRICAL_IDS.includes(id));
+
+      // 1. Strict Netflix Original Detection (Direct production ID OR digital release note by Netflix)
+      const hasDirectNetflixProd = prodIds.some((id) =>
+        [178464, 198834, 185004, 145174, 171251, 87858].includes(id)
+      );
+      const hasNetflixRelease = allReleases.some(
+        (r: any) => r.type === 4 && r.note && r.note.toLowerCase().includes('netflix')
       );
 
       if (
-        (isNetflixProvider || hasNetflixKw) &&
+        (hasDirectNetflixProd || (!isMajorTheatrical && hasNetflixRelease)) &&
         !studiosJson.some((s) => s.id === 178464 || s.name.toLowerCase().includes('netflix'))
       ) {
         studiosJson.push({
@@ -157,12 +169,17 @@ export class CategorizerService {
         });
       }
 
-      // 2. Apple Original Films / Apple TV+ detection (Provider ID 350)
-      const isAppleProvider = allFlat.some((p: any) =>
-        p.provider_id === 350 || p.provider_name?.toLowerCase().includes('apple')
+      // 2. Strict Apple Original Detection (Direct production ID OR digital release note by Apple)
+      const hasDirectAppleProd = prodIds.some((id) => id === 194232);
+      const hasAppleRelease = allReleases.some(
+        (r: any) =>
+          r.type === 4 &&
+          r.note &&
+          (r.note.toLowerCase().includes('apple tv') || r.note.toLowerCase().includes('apple original'))
       );
+
       if (
-        isAppleProvider &&
+        (hasDirectAppleProd || (!isMajorTheatrical && hasAppleRelease)) &&
         !studiosJson.some((s) => s.id === 194232 || s.name.toLowerCase().includes('apple'))
       ) {
         studiosJson.push({
