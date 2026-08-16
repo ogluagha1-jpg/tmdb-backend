@@ -397,13 +397,21 @@ export class CategoryGeneratorService {
     let currentSortOrder = 1;
 
     for (const cat of candidates) {
-      const movieCount = await this.countMoviesForCategory(cat);
+      let movieCount = await this.countMoviesForCategory(cat);
       console.log(`[CATEGORY_GEN] Category "${cat.title}" -> ${movieCount} movies in database.`);
 
       // Strict Threshold Gate: Ignore categories with 0 or very few movies
       if (movieCount < minThreshold) {
         console.log(`[CATEGORY_GEN] ✗ Skipping "${cat.title}" (Below threshold: ${movieCount} < ${minThreshold})`);
         continue;
+      }
+
+      // Display Cap for Top 10 and Trending shelves
+      let displayCount = movieCount;
+      if (cat.category_type === 'top10') {
+        displayCount = Math.min(10, movieCount);
+      } else if (cat.category_type === 'trending') {
+        displayCount = Math.min(50, movieCount);
       }
 
       validCategoriesToPublish.push({
@@ -414,7 +422,7 @@ export class CategoryGeneratorService {
         genre_id: cat.genre_id || null,
         order_by: cat.order_by || 'popularity.desc',
         filter_query: cat.filter_query || null,
-        movie_count: movieCount,
+        movie_count: displayCount,
         sort_order: currentSortOrder++,
         is_active: true,
         updated_at: new Date().toISOString(),
