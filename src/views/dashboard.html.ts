@@ -907,97 +907,119 @@ export function renderDashboardHtml(): string {
       }
     }
 
+    function safeSetText(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.innerText = text !== undefined && text !== null ? text : '--';
+    }
+
+    function safeSetWidth(id, pct) {
+      const el = document.getElementById(id);
+      if (el) el.style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
+    }
+
     async function fetchMetrics() {
       try {
         const res = await fetch('/api/metrics');
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
-        renderData(data);
+        if (data) renderData(data);
       } catch (err) {
-        console.error('Fetch error:', err);
-        showToast('⚠️ Failed to load metrics: ' + err.message);
+        console.error('Fetch metrics error:', err);
       }
     }
 
     function renderData(d) {
-      // 1. Top Summary
-      document.getElementById('val-total-movies').innerText = (d.catalogue.totalMovies || 0).toLocaleString();
-      document.getElementById('val-arabic-total').innerText = (d.catalogue.withAnyArabic || 0).toLocaleString();
-      document.getElementById('prog-arabic').style.width = (d.catalogue.arabicCoveragePct || 0) + '%';
-      document.getElementById('val-arabic-pct').innerText = d.catalogue.arabicCoveragePct + '% Translated';
-      document.getElementById('val-studios-enriched').innerText = (d.catalogue.withStudios || 0).toLocaleString();
-      document.getElementById('val-uptime').innerText = d.server.uptimeFormatted;
-      document.getElementById('val-memory').innerText = 'RAM: ' + d.server.memoryUsedMB + 'MB / ' + d.server.memoryTotalMB + 'MB';
+      if (!d) return;
+      try {
+        const cat = d.catalogue || {};
+        const srv = d.server || {};
+        const rec = d.recentReleases || {};
 
-      // 2. Arabic Breakdown
-      const tot = d.catalogue.totalMovies || 1;
-      document.getElementById('val-arabic-unique-label').innerText = (d.catalogue.withAnyArabic || 0).toLocaleString() + ' Titles';
-      
-      const tAr = d.catalogue.withArabicTitle || 0;
-      document.getElementById('val-title-ar').innerText = tAr.toLocaleString() + ' (' + ((tAr / tot) * 100).toFixed(1) + '%)';
-      document.getElementById('prog-title-ar').style.width = ((tAr / tot) * 100) + '%';
+        // 1. Top Summary
+        safeSetText('val-total-movies', (cat.totalMovies || 0).toLocaleString());
+        safeSetText('val-arabic-total', (cat.withAnyArabic || 0).toLocaleString());
+        safeSetWidth('prog-arabic', cat.arabicCoveragePct || 0);
+        safeSetText('val-arabic-pct', (cat.arabicCoveragePct || 0) + '% Translated');
+        safeSetText('val-studios-enriched', (cat.withStudios || 0).toLocaleString());
+        safeSetText('val-uptime', srv.uptimeFormatted || 'Live');
+        safeSetText('val-memory', 'RAM: ' + (srv.memoryUsedMB || 0) + 'MB / ' + (srv.memoryTotalMB || 0) + 'MB');
 
-      const oAr = d.catalogue.withArabicOverview || 0;
-      document.getElementById('val-overview-ar').innerText = oAr.toLocaleString() + ' (' + ((oAr / tot) * 100).toFixed(1) + '%)';
-      document.getElementById('prog-overview-ar').style.width = ((oAr / tot) * 100) + '%';
+        // 2. Arabic Breakdown
+        const tot = cat.totalMovies || 10244;
+        safeSetText('val-arabic-unique-label', (cat.withAnyArabic || 0).toLocaleString() + ' Titles');
+        
+        const tAr = cat.withArabicTitle || 0;
+        safeSetText('val-title-ar', tAr.toLocaleString() + ' (' + ((tAr / tot) * 100).toFixed(1) + '%)');
+        safeSetWidth('prog-title-ar', (tAr / tot) * 100);
 
-      const tagAr = d.catalogue.withArabicTagline || 0;
-      document.getElementById('val-tagline-ar').innerText = tagAr.toLocaleString() + ' (' + ((tagAr / tot) * 100).toFixed(1) + '%)';
-      document.getElementById('prog-tagline-ar').style.width = ((tagAr / tot) * 100) + '%';
+        const oAr = cat.withArabicOverview || 0;
+        safeSetText('val-overview-ar', oAr.toLocaleString() + ' (' + ((oAr / tot) * 100).toFixed(1) + '%)');
+        safeSetWidth('prog-overview-ar', (oAr / tot) * 100);
 
-      // 3. Era Breakdown
-      const y26 = d.recentReleases.y2026;
-      document.getElementById('val-y2026').innerText = y26.translated + ' / ' + y26.total + ' (' + y26.pct + '%)';
-      document.getElementById('prog-y2026').style.width = y26.pct + '%';
+        const tagAr = cat.withArabicTagline || 0;
+        safeSetText('val-tagline-ar', tagAr.toLocaleString() + ' (' + ((tagAr / tot) * 100).toFixed(1) + '%)');
+        safeSetWidth('prog-tagline-ar', (tagAr / tot) * 100);
 
-      const y25 = d.recentReleases.y2025;
-      document.getElementById('val-y2025').innerText = y25.translated + ' / ' + y25.total + ' (' + y25.pct + '%)';
-      document.getElementById('prog-y2025').style.width = y25.pct + '%';
+        // 3. Era Breakdown
+        const y26 = rec.y2026 || { translated: 0, total: 0, pct: 0 };
+        safeSetText('val-y2026', y26.translated + ' / ' + y26.total + ' (' + y26.pct + '%)');
+        safeSetWidth('prog-y2026', y26.pct);
 
-      const mod = d.recentReleases.modernEra;
-      document.getElementById('val-modern').innerText = mod.translated + ' / ' + mod.total + ' (' + mod.pct + '%)';
-      document.getElementById('prog-modern').style.width = mod.pct + '%';
+        const y25 = rec.y2025 || { translated: 0, total: 0, pct: 0 };
+        safeSetText('val-y2025', y25.translated + ' / ' + y25.total + ' (' + y25.pct + '%)');
+        safeSetWidth('prog-y2025', y25.pct);
 
-      // 4. Studios
-      const studiosContainer = document.getElementById('studios-container');
-      studiosContainer.innerHTML = '';
-      (d.studios || []).forEach(s => {
-        const div = document.createElement('div');
-        div.className = 'studio-pill';
-        div.innerHTML = \`
-          <div>
-            <div class="studio-name" style="display:flex; align-items:center; gap:5px;">
-              <span style="width:6px; height:6px; border-radius:50%; background:\${s.color}; display:inline-block;"></span>
-              \${s.name}
-            </div>
-            <div class="studio-name-ar">\${s.nameAr}</div>
-          </div>
-          <div class="studio-count-badge" style="color: \${s.count >= 6 ? '#10B981' : '#F59E0B'}">\${s.count}</div>
-        \`;
-        studiosContainer.appendChild(div);
-      });
+        const mod = rec.modernEra || { translated: 0, total: 0, pct: 0 };
+        safeSetText('val-modern', mod.translated + ' / ' + mod.total + ' (' + mod.pct + '%)');
+        safeSetWidth('prog-modern', mod.pct);
 
-      // 5. Categories Table
-      const tbody = document.getElementById('categories-tbody');
-      tbody.innerHTML = '';
-      const cats = d.categories || [];
-      document.getElementById('categories-count-badge').innerText = cats.length + ' Published Shelves';
+        // 4. Studios
+        const studiosContainer = document.getElementById('studios-container');
+        if (studiosContainer && Array.isArray(d.studios)) {
+          studiosContainer.innerHTML = '';
+          d.studios.forEach(s => {
+            const div = document.createElement('div');
+            div.className = 'studio-pill';
+            div.innerHTML = \`
+              <div>
+                <div class="studio-name" style="display:flex; align-items:center; gap:5px;">
+                  <span style="width:6px; height:6px; border-radius:50%; background:\${s.color}; display:inline-block;"></span>
+                  \${s.name}
+                </div>
+                <div class="studio-name-ar">\${s.nameAr || ''}</div>
+              </div>
+              <div class="studio-count-badge" style="color: \${s.count >= 6 ? '#10B981' : '#F59E0B'}">\${s.count || 0}</div>
+            \`;
+            studiosContainer.appendChild(div);
+          });
+        }
 
-      cats.forEach(c => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = \`
-          <td><strong>#\${c.sort_order}</strong></td>
-          <td style="font-weight:600; color:white;">\${c.title}</td>
-          <td style="direction:rtl; text-align:right;">\${c.title_ar || '-'}</td>
-          <td><span style="text-transform:uppercase; font-size:10px; opacity:0.8;">\${c.category_type}</span></td>
-          <td><strong style="color:#10B981;">\${(c.movie_count || 0).toLocaleString()} titles</strong></td>
-          <td><span class="pill-published">Live</span></td>
-          <td>
-            <button class="btn-delete" onclick="deleteCategory('\${c.id}', '\${c.title.replace(/'/g, "\\\\'")}')">🗑️</button>
-          </td>
-        \`;
-        tbody.appendChild(tr);
-      });
+        // 5. Categories Table
+        const tbody = document.getElementById('categories-tbody');
+        const cats = d.categories || [];
+        safeSetText('categories-count-badge', cats.length + ' Published Shelves');
+
+        if (tbody) {
+          tbody.innerHTML = '';
+          cats.forEach(c => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = \`
+              <td><strong>#\${c.sort_order}</strong></td>
+              <td style="font-weight:600; color:white;">\${c.title}</td>
+              <td style="direction:rtl; text-align:right;">\${c.title_ar || '-'}</td>
+              <td><span style="text-transform:uppercase; font-size:10px; opacity:0.8;">\${c.category_type}</span></td>
+              <td><strong style="color:#10B981;">\${(c.movie_count || 0).toLocaleString()} titles</strong></td>
+              <td><span class="pill-published">Live</span></td>
+              <td>
+                <button class="btn-delete" onclick="deleteCategory('\${c.id}', '\${(c.title || '').replace(/'/g, "\\\\'")}')">🗑️</button>
+              </td>
+            \`;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (err) {
+        console.error('Render error:', err);
+      }
     }
 
     let autoScannerRunning = true;
@@ -1013,25 +1035,26 @@ export function renderDashboardHtml(): string {
 
           const badge = document.getElementById('scanner-badge');
           const toggleBtn = document.getElementById('btn-toggle-scan');
-          if (autoScannerRunning) {
-            badge.innerText = '🟢 Active (Scanning 24/7)';
-            badge.style.background = 'rgba(16, 185, 129, 0.15)';
-            badge.style.color = '#10B981';
-            badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-            toggleBtn.innerText = '⏸️ Pause Auto-Scan';
-          } else {
-            badge.innerText = '⏸️ Paused';
-            badge.style.background = 'rgba(245, 158, 11, 0.15)';
-            badge.style.color = '#F59E0B';
-            badge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
-            toggleBtn.innerText = '▶️ Resume Auto-Scan';
+          if (badge && toggleBtn) {
+            if (autoScannerRunning) {
+              badge.innerText = '🟢 Active (Scanning 24/7)';
+              badge.style.background = 'rgba(16, 185, 129, 0.15)';
+              badge.style.color = '#10B981';
+              badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+              toggleBtn.innerText = '⏸️ Pause Auto-Scan';
+            } else {
+              badge.innerText = '⏸️ Paused';
+              badge.style.background = 'rgba(245, 158, 11, 0.15)';
+              badge.style.color = '#F59E0B';
+              badge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+              toggleBtn.innerText = '▶️ Resume Auto-Scan';
+            }
           }
 
-          document.getElementById('scanner-progress-label').innerText = 
-            (s.enrichedMovies || 0).toLocaleString() + ' / ' + (s.totalMovies || 10244).toLocaleString() + ' (' + s.completionPct + '%)';
-          document.getElementById('scanner-progress-fill').style.width = s.completionPct + '%';
-          document.getElementById('scanner-current-movie').innerText = s.lastScannedTitle || 'Idle / Saturated';
-          document.getElementById('scanner-session-count').innerText = (s.totalProcessedThisSession || 0).toLocaleString();
+          safeSetText('scanner-progress-label', (s.enrichedMovies || 0).toLocaleString() + ' / ' + (s.totalMovies || 10244).toLocaleString() + ' (' + s.completionPct + '%)');
+          safeSetWidth('scanner-progress-fill', s.completionPct || 0);
+          safeSetText('scanner-current-movie', s.lastScannedTitle || 'Idle / Saturated');
+          safeSetText('scanner-session-count', (s.totalProcessedThisSession || 0).toLocaleString());
         }
       } catch (err) {
         console.error('Scanner status error:', err);
