@@ -899,8 +899,14 @@ export function renderDashboardHtml(): string {
       }
     };
 
+    window.onDeleteClick = function(btn) {
+      const id = btn.getAttribute('data-id');
+      const name = decodeURIComponent(btn.getAttribute('data-name') || '');
+      if (!confirm('Are you sure you want to delete shelf: ' + name + '?')) return;
+      window.deleteCategory(id, name);
+    };
+
     window.deleteCategory = async function(id, name) {
-      if (!confirm('Are you sure you want to delete shelf "' + name + '"?')) return;
       try {
         const res = await fetch('/api/categories/' + id, { method: 'DELETE' });
         const result = await res.json();
@@ -1009,7 +1015,7 @@ export function renderDashboardHtml(): string {
               '<td><strong style="color:#10B981;">' + (c.movie_count || 0).toLocaleString() + ' titles</strong></td>' +
               '<td><span class="pill-published">Live</span></td>' +
               '<td>' +
-                '<button class="btn-delete" onclick="window.deleteCategory(\'' + c.id + '\', \'' + (c.title || '').replace(/'/g, "\\'") + '\')">🗑️</button>' +
+                '<button class="btn-delete" data-id="' + c.id + '" data-name="' + encodeURIComponent(c.title || '') + '" onclick="window.onDeleteClick(this)">🗑️</button>' +
               '</td>';
             tbody.appendChild(tr);
           });
@@ -1111,7 +1117,7 @@ export function renderDashboardHtml(): string {
     };
 
     window.triggerResetAndRescan = async function() {
-      const ok = confirm('⚠️ Reset and Rescan Database from Scratch?\n\nThis will reset all movie enrichment timestamps in Supabase and restart the 24/7 background auto-scanner from movie #1 across all 10,244 titles.\n\nAre you sure you want to proceed?');
+      const ok = confirm('Reset and Rescan Database from Scratch?\\\\n\\\\nThis will reset all movie enrichment timestamps in Supabase and restart the 24/7 background auto-scanner from movie #1 across all 10,244 titles.\\\\n\\\\nAre you sure you want to proceed?');
       if (!ok) return;
 
       window.showToast('🔄 Resetting timestamps and starting fresh scan from scratch...');
@@ -1137,6 +1143,32 @@ export function renderDashboardHtml(): string {
         window.showToast('❌ Failed: ' + err.message);
       }
     };
+
+    // Global aliases
+    window.fetchMetrics = window.fetchMetrics;
+    window.fetchScannerStatus = window.fetchScannerStatus;
+    window.toggleAutoScanner = window.toggleAutoScanner;
+    window.triggerBatchScan = window.triggerBatchScan;
+    window.triggerMultiSourceSync = window.triggerMultiSourceSync;
+    window.triggerMovieSync = window.triggerMovieSync;
+    window.triggerResetAndRescan = window.triggerResetAndRescan;
+    window.triggerRegenerateCategories = window.triggerRegenerateCategories;
+    window.openCreateModal = window.openCreateModal;
+    window.closeCreateModal = window.closeCreateModal;
+
+    // Direct non-prefixed aliases for inline HTML onclick calls
+    var fetchMetrics = window.fetchMetrics;
+    var fetchScannerStatus = window.fetchScannerStatus;
+    var toggleAutoScanner = window.toggleAutoScanner;
+    var triggerBatchScan = window.triggerBatchScan;
+    var triggerMultiSourceSync = window.triggerMultiSourceSync;
+    var triggerMovieSync = window.triggerMovieSync;
+    var triggerResetAndRescan = window.triggerResetAndRescan;
+    var triggerRegenerateCategories = window.triggerRegenerateCategories;
+    var openCreateModal = window.openCreateModal;
+    var closeCreateModal = window.closeCreateModal;
+    var applyPreset = window.applyPreset;
+    var submitCreateCategory = window.submitCreateCategory;
 
     // Initial load + auto-refresh
     window.fetchMetrics();
