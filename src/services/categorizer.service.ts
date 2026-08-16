@@ -47,7 +47,7 @@ export class CategorizerService {
   }
 
   /// Enrich a single movie
-  private async enrichMovie(movie: any, supabase: any): Promise<boolean> {
+  public async enrichMovie(movie: any, supabase: any): Promise<boolean> {
     try {
       let tmdbDetails: any = null;
       let cinemetaMeta: any = null;
@@ -230,6 +230,7 @@ export class CategorizerService {
         release_date: releaseDate,
         year: year,
         imdb_id: targetImdbId,
+        enriched_at: new Date().toISOString(),
       };
 
       // Arabic localization: Title, Overview, Tagline, Cast

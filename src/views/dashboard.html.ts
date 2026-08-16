@@ -575,9 +575,47 @@ export function renderDashboardHtml(): string {
         <button class="btn btn-emerald" onclick="openCreateModal()">➕ Create Shelf</button>
         <button class="btn btn-secondary" onclick="fetchMetrics()">🔄 Refresh</button>
         <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">📁 Auto-Scan</button>
-        <button class="btn btn-primary" style="grid-column: span 2;" onclick="triggerMovieSync()">⚡ Trigger Enrichment (100)</button>
       </div>
     </header>
+
+    <!-- ⚡ 24/7 AUTO-SCANNER & BATCH CONTROLS ⚡ -->
+    <div class="card" style="margin-bottom: 20px; border-color: rgba(229, 9, 20, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(229, 9, 20, 0.08));">
+      <div class="card-title-row" style="flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="card-icon" style="background: rgba(229, 9, 20, 0.2); color: #E50914; font-size: 20px;">⚡</div>
+          <div>
+            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+              Multi-Source 24/7 Auto-Scanner & Batch Engine
+              <span id="scanner-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(16, 185, 129, 0.15); color: #10B981; border-color: rgba(16, 185, 129, 0.3);">
+                🟢 Active (24/7)
+              </span>
+            </h2>
+            <p class="card-desc" id="scanner-subtitle">Continuous background enrichment across TMDB, OMDb, Cinemeta & Wikipedia</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button id="btn-toggle-scan" class="btn btn-secondary" onclick="toggleAutoScanner()" style="font-weight: 700;">⏸️ Pause Auto-Scan</button>
+          <button class="btn btn-primary" onclick="triggerBatchScan(500)" style="font-weight: 700;">⚡ Scan Next 500 Batch</button>
+          <button class="btn btn-secondary" onclick="triggerMultiSourceSync()">🌐 Knowledge Graph Sync</button>
+          <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">🔄 Regenerate Shelves</button>
+        </div>
+      </div>
+
+      <!-- Live Auto-Scanner Progress Bar -->
+      <div style="margin-top: 14px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+          <span><strong>Overall Catalogue Enrichment Progress:</strong></span>
+          <strong id="scanner-progress-label">-- / -- (0%)</strong>
+        </div>
+        <div class="progress-track" style="height: 10px; border-radius: 6px; background: rgba(255,255,255,0.06);">
+          <div id="scanner-progress-fill" class="progress-fill" style="width: 0%; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #E50914, #F59E0B, #10B981); transition: width 0.4s ease;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+          <span>🎯 Currently Processing: <strong id="scanner-current-movie" style="color: white;">--</strong></span>
+          <span>Processed This Session: <strong id="scanner-session-count" style="color: #10B981;">--</strong> titles</span>
+        </div>
+      </div>
+    </div>
 
     <!-- Top 4 Summary Metrics (2x2 on phones, 4x1 on desktop) -->
     <div class="grid-4">
@@ -961,6 +999,84 @@ export function renderDashboardHtml(): string {
       });
     }
 
+    let autoScannerRunning = true;
+
+    async function fetchScannerStatus() {
+      try {
+        const res = await fetch('/api/scan/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.status) {
+          const s = data.status;
+          autoScannerRunning = s.isRunning && !s.isPaused;
+
+          const badge = document.getElementById('scanner-badge');
+          const toggleBtn = document.getElementById('btn-toggle-scan');
+          if (autoScannerRunning) {
+            badge.innerText = '🟢 Active (Scanning 24/7)';
+            badge.style.background = 'rgba(16, 185, 129, 0.15)';
+            badge.style.color = '#10B981';
+            badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            toggleBtn.innerText = '⏸️ Pause Auto-Scan';
+          } else {
+            badge.innerText = '⏸️ Paused';
+            badge.style.background = 'rgba(245, 158, 11, 0.15)';
+            badge.style.color = '#F59E0B';
+            badge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+            toggleBtn.innerText = '▶️ Resume Auto-Scan';
+          }
+
+          document.getElementById('scanner-progress-label').innerText = 
+            (s.enrichedMovies || 0).toLocaleString() + ' / ' + (s.totalMovies || 10244).toLocaleString() + ' (' + s.completionPct + '%)';
+          document.getElementById('scanner-progress-fill').style.width = s.completionPct + '%';
+          document.getElementById('scanner-current-movie').innerText = s.lastScannedTitle || 'Idle / Saturated';
+          document.getElementById('scanner-session-count').innerText = (s.totalProcessedThisSession || 0).toLocaleString();
+        }
+      } catch (err) {
+        console.error('Scanner status error:', err);
+      }
+    }
+
+    async function toggleAutoScanner() {
+      try {
+        if (autoScannerRunning) {
+          await fetch('/api/scan/stop', { method: 'POST' });
+          showToast('⏸️ Continuous Auto-Scanner Paused.');
+        } else {
+          await fetch('/api/scan/start', { method: 'POST' });
+          showToast('🟢 Continuous 24/7 Auto-Scanner Resumed!');
+        }
+        setTimeout(fetchScannerStatus, 500);
+      } catch (err) {
+        showToast('❌ Error: ' + err.message);
+      }
+    }
+
+    async function triggerBatchScan(limit = 500) {
+      showToast('⚡ Triggering batch scan of next ' + limit + ' movies...');
+      try {
+        const res = await fetch('/api/scan/batch?limit=' + limit, { method: 'POST' });
+        const result = await res.json();
+        showToast('✓ ' + (result.message || 'Batch scan complete!'));
+        setTimeout(fetchMetrics, 1000);
+        setTimeout(fetchScannerStatus, 1000);
+      } catch (err) {
+        showToast('❌ Batch scan failed: ' + err.message);
+      }
+    }
+
+    async function triggerMultiSourceSync() {
+      showToast('🌐 Triggering Knowledge Graph sync (Netflix / Apple / Amazon)...');
+      try {
+        const res = await fetch('/api/sync/multi-source', { method: 'POST' });
+        const result = await res.json();
+        showToast('✓ ' + (result.message || 'Multi-source sync started!'));
+        setTimeout(fetchMetrics, 2000);
+      } catch (err) {
+        showToast('❌ Knowledge Graph sync failed: ' + err.message);
+      }
+    }
+
     async function triggerMovieSync() {
       showToast('⚡ Triggering background enrichment batch...');
       try {
@@ -985,9 +1101,11 @@ export function renderDashboardHtml(): string {
       }
     }
 
-    // Initial load + auto-refresh every 12 seconds
+    // Initial load + auto-refresh
     fetchMetrics();
-    setInterval(fetchMetrics, 12000);
+    fetchScannerStatus();
+    setInterval(fetchMetrics, 10000);
+    setInterval(fetchScannerStatus, 4000);
   </script>
 </body>
 </html>`;

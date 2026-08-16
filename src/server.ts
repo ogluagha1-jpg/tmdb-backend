@@ -165,6 +165,51 @@ app.post('/api/sync/multi-source', async (_req: Request, res: Response) => {
     });
 });
 
+// 10. Auto-Scanner Live Status
+app.get('/api/scan/status', async (_req: Request, res: Response) => {
+  try {
+    const { AutoScannerService } = await import('./services/auto_scanner.service');
+    const status = await AutoScannerService.getInstance().getStatus();
+    res.status(200).json({ success: true, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 11. Start Continuous 24/7 Auto-Scanner
+app.post('/api/scan/start', async (_req: Request, res: Response) => {
+  try {
+    const { AutoScannerService } = await import('./services/auto_scanner.service');
+    AutoScannerService.getInstance().start();
+    res.status(200).json({ success: true, message: 'Continuous 24/7 background auto-scanner started.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 12. Pause Continuous Auto-Scanner
+app.post('/api/scan/stop', async (_req: Request, res: Response) => {
+  try {
+    const { AutoScannerService } = await import('./services/auto_scanner.service');
+    AutoScannerService.getInstance().pause();
+    res.status(200).json({ success: true, message: 'Auto-scanner paused.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 13. Trigger Manual Batch Scan (e.g. 500 movies)
+app.post('/api/scan/batch', async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string, 10) || 200;
+    const { AutoScannerService } = await import('./services/auto_scanner.service');
+    const result = await AutoScannerService.getInstance().scanBatch(limit);
+    res.status(200).json({ success: true, message: `Batch scan of ${result.processed} movies complete (Updated ${result.updated}).`, result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 app.listen(port, () => {
@@ -178,21 +223,16 @@ app.listen(port, () => {
   // Start background schedulers
   setupCronJobs();
 
-  // Initialize Multi-Source Knowledge Graph (Wikipedia/IMDb/Wikidata)
+  // Initialize Multi-Source Knowledge Graph and start 24/7 Auto-Scanner
   import('./services/streaming_sources.service').then(({ StreamingSourcesService }) => {
     StreamingSourcesService.getInstance()
       .initialize()
-      .then(() => {
-        // Run multi-source catalogue sync
-        categorizer
-          .syncMultiSourceStreamingOriginals(200)
-          .then(() => {
-            console.log('[BOOT] Multi-source sync complete. Refreshing home categories...');
-            generator.generateAndSyncCategories().catch(() => {});
-          })
-          .catch((err) => {
-            console.error('[BOOT] Multi-source sync error:', err.message);
-          });
+      .then(async () => {
+        console.log('[BOOT] StreamingSourcesService initialized.');
+        
+        // Start 24/7 continuous background auto-scanner
+        const { AutoScannerService } = await import('./services/auto_scanner.service');
+        AutoScannerService.getInstance().start();
       })
       .catch((e) => {
         console.error('[BOOT] StreamingSourcesService init error:', e.message);
