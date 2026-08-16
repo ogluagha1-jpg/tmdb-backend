@@ -170,16 +170,6 @@ export function renderDashboardHtml(): string {
       transform: scale(0.97);
     }
 
-    .btn-purple {
-      background: linear-gradient(135deg, #8B5CF6, #6366F1);
-      color: white;
-      box-shadow: 0 3px 12px rgba(99, 102, 241, 0.35);
-    }
-
-    .btn-purple:active {
-      transform: scale(0.97);
-    }
-
     .btn-secondary {
       background: rgba(255, 255, 255, 0.05);
       border-color: var(--border-subtle);
@@ -189,24 +179,6 @@ export function renderDashboardHtml(): string {
     .btn-secondary:active {
       background: rgba(255, 255, 255, 0.12);
       transform: scale(0.97);
-    }
-
-    /* Live Scan Banner */
-    .scan-banner {
-      background: rgba(99, 102, 241, 0.12);
-      border: 1px solid rgba(99, 102, 241, 0.3);
-      border-radius: 12px;
-      padding: 14px 18px;
-      margin-bottom: 20px;
-      display: none;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .scan-banner.active {
-      display: flex;
     }
 
     /* Grid Layouts */
@@ -603,27 +575,9 @@ export function renderDashboardHtml(): string {
         <button class="btn btn-emerald" onclick="openCreateModal()">➕ Create Shelf</button>
         <button class="btn btn-secondary" onclick="fetchMetrics()">🔄 Refresh</button>
         <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">📁 Auto-Scan</button>
-        <button class="btn btn-purple" onclick="restartFullScan(true)">🚀 Rescan All (From Start)</button>
-        <button class="btn btn-primary" onclick="triggerMovieSync()">⚡ Step 100 Batch</button>
+        <button class="btn btn-primary" style="grid-column: span 2;" onclick="triggerMovieSync()">⚡ Trigger Enrichment (100)</button>
       </div>
     </header>
-
-    <!-- Live Scan Progress Banner -->
-    <div id="scan-progress-banner" class="scan-banner">
-      <div style="display:flex; align-items:center; gap:10px;">
-        <div class="status-dot" style="background:#8B5CF6; box-shadow:0 0 10px #8B5CF6;"></div>
-        <div>
-          <strong id="scan-banner-title" style="font-size:13px; color:white;">Catalogue Rescan Active...</strong>
-          <p id="scan-banner-desc" style="font-size:11px; color:var(--text-secondary); margin-top:2px;">Scanning movies from offset 0 to 10,244</p>
-        </div>
-      </div>
-      <div style="min-width: 160px; text-align: right;">
-        <strong id="scan-banner-pct" style="font-family:'Outfit',sans-serif; font-size:16px; color:#8B5CF6;">0%</strong>
-        <div class="progress-track" style="margin-top:4px;">
-          <div id="scan-banner-bar" class="progress-fill" style="width:0%; background:linear-gradient(90deg, #8B5CF6, #6366F1);"></div>
-        </div>
-      </div>
-    </div>
 
     <!-- Top 4 Summary Metrics (2x2 on phones, 4x1 on desktop) -->
     <div class="grid-4">
@@ -914,44 +868,12 @@ export function renderDashboardHtml(): string {
       }
     }
 
-    async function restartFullScan(force = false) {
-      showToast('🚀 Re-initiating full catalogue scan from beginning...');
-      try {
-        const res = await fetch('/api/sync/restart?force=' + force, { method: 'POST' });
-        const data = await res.json();
-        showToast(data.message || 'Full catalogue scan started!');
-        checkScanStatus();
-      } catch (err) {
-        showToast('❌ Failed to start scan: ' + err.message);
-      }
-    }
-
-    async function checkScanStatus() {
-      try {
-        const res = await fetch('/api/sync/status');
-        const data = await res.json();
-        const banner = document.getElementById('scan-progress-banner');
-        if (data.status && data.status.isRunning) {
-          banner.classList.add('active');
-          const off = data.status.currentOffset || 0;
-          const tot = data.status.totalMovies || 10244;
-          const pct = Math.min(100, ((off / tot) * 100)).toFixed(1);
-          document.getElementById('scan-banner-desc').innerText = 'Scanning offset #' + off.toLocaleString() + ' / ' + tot.toLocaleString() + ' (' + (data.status.updatedCount || 0) + ' updated)';
-          document.getElementById('scan-banner-pct').innerText = pct + '%';
-          document.getElementById('scan-banner-bar').style.width = pct + '%';
-        } else {
-          banner.classList.remove('active');
-        }
-      } catch (_) {}
-    }
-
     async function fetchMetrics() {
       try {
         const res = await fetch('/api/metrics');
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         renderData(data);
-        checkScanStatus();
       } catch (err) {
         console.error('Fetch error:', err);
         showToast('⚠️ Failed to load metrics: ' + err.message);
@@ -1040,7 +962,7 @@ export function renderDashboardHtml(): string {
     }
 
     async function triggerMovieSync() {
-      showToast('⚡ Stepping enrichment batch...');
+      showToast('⚡ Triggering background enrichment batch...');
       try {
         const res = await fetch('/api/sync/movies?batch=100', { method: 'POST' });
         const result = await res.json();
@@ -1063,9 +985,9 @@ export function renderDashboardHtml(): string {
       }
     }
 
-    // Initial load + auto-refresh every 8 seconds
+    // Initial load + auto-refresh every 12 seconds
     fetchMetrics();
-    setInterval(fetchMetrics, 8000);
+    setInterval(fetchMetrics, 12000);
   </script>
 </body>
 </html>`;
