@@ -49,14 +49,15 @@ export class CategorizerService {
   /// Enrich a single movie
   private async enrichMovie(movie: any, supabase: any): Promise<boolean> {
     try {
-      let tmdbDetails = null;
+      let tmdbDetails: any = null;
+      let cinemetaMeta: any = null;
+      let omdbData: any = null;
 
-      // Try direct fetch if tmdb_id is present
+      // ── TIER 1: PRIMARY TMDB RESOLUTION ──
       if (movie.tmdb_id && movie.tmdb_id > 0) {
         tmdbDetails = await this.tmdb.getMovieDetails(movie.tmdb_id);
       }
 
-      // Fallback: Search by clean title
       if (!tmdbDetails) {
         const cleaned = this.cleanTitle(movie.title);
         if (cleaned.length > 0) {
@@ -64,28 +65,57 @@ export class CategorizerService {
         }
       }
 
-      if (!tmdbDetails) {
+      // ── TIER 2 & 3: CINEMETA & OMDB SECONDARY FETCH ──
+      const targetImdbId = tmdbDetails?.imdb_id || movie.imdb_id;
+      if (targetImdbId && targetImdbId.startsWith('tt')) {
+        const [cinemetaRes, omdbRes] = await Promise.all([
+          (await import('./cinemeta.service')).CinemetaService.getInstance().getMeta(targetImdbId).catch(() => null),
+          this.imdb.getImdbData(targetImdbId).catch(() => null),
+        ]);
+        cinemetaMeta = cinemetaRes;
+        omdbData = omdbRes;
+      }
+
+      // If TMDB completely failed, fallback to Cinemeta search
+      if (!tmdbDetails && cinemetaMeta) {
+        tmdbDetails = {
+          id: null,
+          title: cinemetaMeta.name || movie.title,
+          overview: cinemetaMeta.description || '',
+          runtime: cinemetaMeta.runtime ? parseInt(cinemetaMeta.runtime, 10) : undefined,
+          vote_average: cinemetaMeta.imdbRating,
+          popularity: 10.0,
+          release_date: cinemetaMeta.year ? `${cinemetaMeta.year}-01-01` : undefined,
+          original_language: 'en',
+          imdb_id: targetImdbId,
+        };
+      }
+
+      if (!tmdbDetails && !cinemetaMeta && !omdbData) {
         return false;
       }
 
-      // Fetch Arabic metadata if not present
+      // ── ARABIC LOCALIZATION TIER ──
       let arMeta: any = {};
-      if (!movie.title_ar) {
+      if (!movie.title_ar && tmdbDetails?.id) {
         arMeta = await this.tmdb.getArabicMetadata(tmdbDetails.id);
       }
 
-      // Extract director
+      // ── DIRECTOR COOPERATIVE RESOLUTION ──
       let director: string | undefined;
-      if (tmdbDetails.credits?.crew) {
+      if (tmdbDetails?.credits?.crew) {
         const dir = tmdbDetails.credits.crew.find((c: any) => c.job === 'Director');
         if (dir) director = dir.name;
       }
+      if (!director && cinemetaMeta?.director && cinemetaMeta.director.length > 0) {
+        director = cinemetaMeta.director[0];
+      }
 
-      // Extract trailer
+      // ── TRAILER COOPERATIVE RESOLUTION ──
       let trailerUrl: string | undefined;
       let trailerKey: string | undefined;
       let trailerSite: string | undefined;
-      if (tmdbDetails.videos?.results) {
+      if (tmdbDetails?.videos?.results) {
         const trailer = tmdbDetails.videos.results.find(
           (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
         );
@@ -95,9 +125,14 @@ export class CategorizerService {
           trailerUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
         }
       }
+      if (!trailerKey && cinemetaMeta?.trailers && cinemetaMeta.trailers.length > 0) {
+        trailerKey = cinemetaMeta.trailers[0].source;
+        trailerSite = 'YouTube';
+        trailerUrl = `https://www.youtube.com/watch?v=${trailerKey}`;
+      }
 
-      // Standardize cast
-      let castJson = (tmdbDetails.credits?.cast || [])
+      // ── CAST COOPERATIVE RESOLUTION ──
+      let castJson: any[] = (tmdbDetails?.credits?.cast || [])
         .slice(0, 10)
         .map((c: any) => ({
           id: c.id,
@@ -106,19 +141,49 @@ export class CategorizerService {
           profile_path: c.profile_path,
         }));
 
-      // Standardize genres & keywords
-      const genresJson = (tmdbDetails.genres || []).map((g: any) => ({
+      if (castJson.length === 0 && cinemetaMeta?.cast && cinemetaMeta.cast.length > 0) {
+        castJson = cinemetaMeta.cast.slice(0, 10).map((name: string, idx: number) => ({
+          id: 888000 + idx,
+          name,
+          character: '',
+          profile_path: null,
+        }));
+      }
+
+      // ── GENRES & KEYWORDS COOPERATIVE RESOLUTION ──
+      const genresJson: any[] = (tmdbDetails?.genres || []).map((g: any) => ({
         id: g.id,
         name: g.name,
       }));
+      if (genresJson.length === 0 && cinemetaMeta?.genres && cinemetaMeta.genres.length > 0) {
+        cinemetaMeta.genres.forEach((g: string, idx: number) => {
+          genresJson.push({ id: 777000 + idx, name: g });
+        });
+      }
 
-      const keywordsJson = (tmdbDetails.keywords?.keywords || []).map((k: any) => ({
+      const keywordsJson: any[] = (tmdbDetails?.keywords?.keywords || []).map((k: any) => ({
         id: k.id,
         name: k.name,
       }));
 
-      // Standardize production studios / companies (Pure TMDB Production Companies only)
-      const studiosJson = (tmdbDetails.production_companies || []).map((s: any) => ({
+      // ── OMDB / ROTTEN TOMATOES / AWARDS ENRICHMENT ──
+      if (omdbData) {
+        if (omdbData.rottenTomatoesScore) {
+          keywordsJson.push({ id: 999901, name: `Rotten Tomatoes ${omdbData.rottenTomatoesScore}%` });
+          if (omdbData.rottenTomatoesScore >= 85) {
+            keywordsJson.push({ id: 999902, name: 'Certified Fresh' });
+          }
+        }
+        if (omdbData.awards && /oscar|academy award/i.test(omdbData.awards)) {
+          keywordsJson.push({ id: 999903, name: 'Oscar Winner' });
+        }
+        if (omdbData.isTop250) {
+          keywordsJson.push({ id: 999904, name: 'IMDb Top 250' });
+        }
+      }
+
+      // ── PRODUCTION STUDIOS & KNOWLEDGE GRAPH ──
+      const studiosJson: any[] = (tmdbDetails?.production_companies || []).map((s: any) => ({
         id: s.id,
         name: s.name,
         logo_path: s.logo_path || null,
@@ -126,12 +191,12 @@ export class CategorizerService {
       }));
 
       // Extract release year
-      const releaseDate = tmdbDetails.release_date || movie.release_date || '';
-      const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : movie.year;
+      const releaseDate = tmdbDetails?.release_date || movie.release_date || (cinemetaMeta?.year ? `${cinemetaMeta.year}-01-01` : '');
+      const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : (movie.year || cinemetaMeta?.year);
 
-      // Multi-Source Knowledge Graph (Wikipedia / IMDb / Wikidata)
+      // Multi-Source Streaming Originals Knowledge Graph (Wikipedia / Wikidata)
       const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
-      const matchedOriginal = streamingSources.matchOriginal(movie.title, tmdbDetails.title, year);
+      const matchedOriginal = streamingSources.matchOriginal(movie.title, tmdbDetails?.title, year);
       if (matchedOriginal) {
         const alreadyPresent = studiosJson.some((s: any) => s.id === matchedOriginal.studioId);
         if (!alreadyPresent) {
@@ -144,85 +209,41 @@ export class CategorizerService {
         }
       }
 
-      // OMDb & Rotten Tomatoes Enrichment
-      const targetImdbId = tmdbDetails.imdb_id || movie.imdb_id;
-      if (targetImdbId) {
-        try {
-          const omdb = await this.imdb.getImdbData(targetImdbId);
-          if (omdb) {
-            if (omdb.rottenTomatoesScore) {
-              keywordsJson.push({ id: 999901, name: `Rotten Tomatoes ${omdb.rottenTomatoesScore}%` });
-              if (omdb.rottenTomatoesScore >= 85) {
-                keywordsJson.push({ id: 999902, name: 'Certified Fresh' });
-              }
-            }
-            if (omdb.awards && /oscar|academy award/i.test(omdb.awards)) {
-              keywordsJson.push({ id: 999903, name: 'Oscar Winner' });
-            }
-            if (omdb.isTop250) {
-              keywordsJson.push({ id: 999904, name: 'IMDb Top 250' });
-            }
-          }
-        } catch {
-          // Non-fatal
-        }
-
-        // Cinemeta Open CDN Fallback (For missing trailers, directors, cast)
-        if (!trailerKey || !director || castJson.length === 0) {
-          try {
-            const cinemeta = await (await import('./cinemeta.service')).CinemetaService.getInstance().getMeta(targetImdbId);
-            if (cinemeta) {
-              if (!director && cinemeta.director && cinemeta.director.length > 0) {
-                director = cinemeta.director[0];
-              }
-              if (castJson.length === 0 && cinemeta.cast && cinemeta.cast.length > 0) {
-                castJson = cinemeta.cast.slice(0, 10).map((name: string, idx: number) => ({
-                  id: 888000 + idx,
-                  name,
-                  character: '',
-                  profile_path: null,
-                }));
-              }
-              if (!trailerKey && cinemeta.trailers && cinemeta.trailers.length > 0) {
-                trailerKey = cinemeta.trailers[0].source;
-                trailerSite = 'YouTube';
-                trailerUrl = `https://www.youtube.com/watch?v=${trailerKey}`;
-              }
-            }
-          } catch {
-            // Non-fatal
-          }
-        }
-      }
-
-      // Build update payload
+      // ── BUILD UNIFIED UPDATE PAYLOAD WITH COMPREHENSIVE FALLBACKS ──
       const updatePayload: any = {
-        tmdb_id: tmdbDetails.id,
-        tmdb_title: tmdbDetails.title,
+        tmdb_id: tmdbDetails?.id || movie.tmdb_id,
+        tmdb_title: tmdbDetails?.title || cinemetaMeta?.name || movie.title,
         genres_json: genresJson,
         keywords_json: keywordsJson,
         studios_json: studiosJson,
-        overview: tmdbDetails.overview || '',
-        runtime: tmdbDetails.runtime,
-        vote_average: tmdbDetails.vote_average,
-        popularity: tmdbDetails.popularity,
-        tagline: tmdbDetails.tagline,
-        original_language: tmdbDetails.original_language,
-        director: director,
-        trailer_url: trailerUrl,
-        trailer_key: trailerKey,
-        trailer_site: trailerSite,
+        overview: tmdbDetails?.overview || cinemetaMeta?.description || movie.overview || '',
+        runtime: tmdbDetails?.runtime || (cinemetaMeta?.runtime ? parseInt(cinemetaMeta.runtime, 10) : undefined) || movie.runtime,
+        vote_average: tmdbDetails?.vote_average || omdbData?.imdbRating || cinemetaMeta?.imdbRating || movie.vote_average,
+        popularity: tmdbDetails?.popularity || movie.popularity || 10.0,
+        tagline: tmdbDetails?.tagline || movie.tagline,
+        original_language: tmdbDetails?.original_language || movie.original_language || 'en',
+        director: director || movie.director,
+        trailer_url: trailerUrl || movie.trailer_url,
+        trailer_key: trailerKey || movie.trailer_key,
+        trailer_site: trailerSite || movie.trailer_site,
         cast_json: castJson,
         release_date: releaseDate,
         year: year,
-        imdb_id: tmdbDetails.imdb_id,
+        imdb_id: targetImdbId,
       };
 
-      if (tmdbDetails.poster_path) {
+      // Poster fallback: TMDB -> Cinemeta -> OMDb
+      if (tmdbDetails?.poster_path) {
         updatePayload.poster_path = tmdbDetails.poster_path;
+      } else if (cinemetaMeta?.poster && !movie.poster_path) {
+        updatePayload.poster_path = cinemetaMeta.poster;
       }
-      if (tmdbDetails.backdrop_path) {
+
+      // Backdrop fallback: TMDB -> Cinemeta
+      if (tmdbDetails?.backdrop_path) {
         updatePayload.backdrop_path = tmdbDetails.backdrop_path;
+      } else if (cinemetaMeta?.background && !movie.backdrop_path) {
+        updatePayload.backdrop_path = cinemetaMeta.background;
       }
 
       if (arMeta.titleAr) updatePayload.title_ar = arMeta.titleAr;
@@ -241,8 +262,8 @@ export class CategorizerService {
       }
 
       return true;
-    } catch (err: any) {
-      console.error(`[CATEGORIZER] Error processing movie #${movie.id}:`, err.message);
+    } catch (e: any) {
+      console.error(`[CATEGORIZER] Movie #${movie.id} (${movie.title}) enrichment error:`, e.message);
       return false;
     }
   }
