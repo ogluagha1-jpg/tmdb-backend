@@ -212,7 +212,7 @@ app.post('/api/scan/batch', async (req: Request, res: Response) => {
 
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`=======================================================`);
   console.log(`🚀 Teraflix Categorization Backend Server Online`);
   console.log(`📍 Listening on port: ${port}`);
@@ -247,4 +247,27 @@ app.listen(port, () => {
       console.error('[BOOT] Initial category scan failed:', e.message);
     });
 });
+
+// Graceful Process Termination Handlers
+const gracefulShutdown = async (signal: string) => {
+  console.log(`[SHUTDOWN] Received ${signal}. Gracefully stopping background services...`);
+  try {
+    const { AutoScannerService } = await import('./services/auto_scanner.service');
+    AutoScannerService.getInstance().pause();
+  } catch (_) {}
+
+  server.close(() => {
+    console.log('[SHUTDOWN] HTTP server closed cleanly. Process exiting.');
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    console.error('[SHUTDOWN] Forcefully terminating process after timeout.');
+    process.exit(1);
+  }, 5000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 

@@ -413,13 +413,18 @@ export class CategoryGeneratorService {
       }
     }
 
+    // Parallel count evaluation across all candidate categories
+    const countResults = await Promise.all(
+      candidates.map(async (cat) => {
+        const movieCount = await this.countMoviesForCategory(cat);
+        return { cat, movieCount };
+      })
+    );
+
     const validCategoriesToPublish: any[] = [];
     let currentSortOrder = 1;
 
-    for (const cat of candidates) {
-      const movieCount = await this.countMoviesForCategory(cat);
-      console.log(`[CATEGORY_GEN] Category "${cat.title}" -> ${movieCount} matching movies in database.`);
-
+    for (const { cat, movieCount } of countResults) {
       // Strict Threshold Gate: Ignore categories with 0 or very few movies
       if (movieCount < minThreshold) {
         console.log(`[CATEGORY_GEN] ✗ Skipping "${cat.title}" (Below threshold: ${movieCount} < ${minThreshold})`);

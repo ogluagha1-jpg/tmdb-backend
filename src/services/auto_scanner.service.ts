@@ -137,8 +137,14 @@ export class AutoScannerService {
             slice.map(async (m) => {
               this.lastScannedTitle = m.title;
               this.lastActiveAt = new Date().toISOString();
+              const timeoutPromise = new Promise<boolean>((resolve) =>
+                setTimeout(() => resolve(false), 8000)
+              );
               try {
-                await (this.categorizer as any).enrichMovie(m, supabase);
+                await Promise.race([
+                  (this.categorizer as any).enrichMovie(m, supabase),
+                  timeoutPromise,
+                ]);
               } catch (e: any) {
                 this.lastError = e.message;
               }

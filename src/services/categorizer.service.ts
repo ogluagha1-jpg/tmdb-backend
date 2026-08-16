@@ -11,13 +11,23 @@ export class CategorizerService {
     this.imdb = new ImdbService();
   }
 
-  /// Clean movie title helper to remove quality tags, year, resolution, etc.
+  /// Advanced 50+ tag title cleaner for international releases and scene tags
   private cleanTitle(rawTitle: string): string {
     if (!rawTitle) return '';
     return rawTitle
-      .replace(/[\(\[\{].*?[\)\]\}]/g, ' ') // Remove brackets
-      .replace(/\b(19\d\d|20\d\d)\b/g, ' ') // Remove years
-      .replace(/\b(4k|2160p|1080p|720p|480p|bluray|web-dl|hdrip|x264|x265|hevc|aac|dts)\b/gi, ' ')
+      // 1. Remove bracketed/parenthesized info: (2021), [1080p], {4k}, (DE), (TR), [YTS.MX], etc.
+      .replace(/[\(\[\{].*?[\)\]\}]/g, ' ')
+      // 2. Remove years (1900 - 2099)
+      .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
+      // 3. Remove resolution & source tags
+      .replace(/\b(4k|2160p|1080p|1080i|720p|576p|480p|360p|uhd|fhd|hd|sd|bluray|blu-ray|bdrip|brrip|web-dl|webdl|webrip|web|hdrip|dvdrip|dvd|remux|vhs|cam|telesync|ts|hdcam|hdtc|hdtv|pdtv|dsr|screener|scr|r5)\b/gi, ' ')
+      // 4. Remove audio formats, codecs & container tags (e.g. aac5.1, ddp5.1, ac3, truehd, etc.)
+      .replace(/\b(x264|x265|h264|h265|hevc|avc|av1|vp9|xvid|divx|10bit|8bit|hdr|hdr10|hdr10plus|dv|dovi|dolby\s*vision|atmos|ddp\d*(\.\d+)?|dd\d*(\.\d+)?|dts-hd|dts|ac3|aac\d*(\.\d+)?|mp3|flac|truehd|mp4|mkv|avi)\b/gi, ' ')
+      // 5. Remove edition, cut & language keywords
+      .replace(/\b(extended|directors\s*cut|unrated|theatrical|remastered|special\s*edition|reloaded|repack|proper|internal|dubbed|subbed|multi|vostfr|sub|gespr)\b/gi, ' ')
+      // 6. Remove trailing release group hashes/tags e.g. -TERAFLIX, -YTS, -RARBG
+      .replace(/-\s*[a-zA-Z0-9_\-]+$/gi, ' ')
+      // 7. Clean punctuation & excessive spaces
       .replace(/[._\-+]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -92,13 +102,20 @@ export class CategorizerService {
       }
 
       if (!tmdbDetails && !cinemetaMeta && !omdbData) {
+        // Stamp enriched_at on unmatchable orphan titles to prevent infinite scanner retry loops
+        await supabase
+          .from('movies')
+          .update({
+            enriched_at: new Date().toISOString(),
+          })
+          .eq('id', movie.id);
         return false;
       }
 
-      // ── ARABIC LOCALIZATION TIER ──
+      // ── ARABIC LOCALIZATION TIER (TMDB + WIKIPEDIA ARABIC FALLBACK) ──
       let arMeta: any = {};
       if (!movie.title_ar && tmdbDetails?.id) {
-        arMeta = await this.tmdb.getArabicMetadata(tmdbDetails.id);
+        arMeta = await this.tmdb.getArabicMetadata(tmdbDetails.id, tmdbDetails.title || movie.title);
       }
 
       // ── DIRECTOR COOPERATIVE RESOLUTION ──

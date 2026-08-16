@@ -88,59 +88,82 @@ export class TmdbService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  /// Executes request with automatic exponential backoff retry for 429 / network errors
+  private async requestWithRetry<T>(fn: () => Promise<T>, retries: number = 2, delayMs: number = 300): Promise<T | null> {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        if (attempt === retries) return null;
+        const isRateLimited = err.response?.status === 429;
+        const waitTime = isRateLimited ? (attempt + 1) * 1000 : delayMs * Math.pow(2, attempt);
+        await this.delay(waitTime);
+      }
+    }
+    return null;
+  }
+
   /// Fetches daily trending movies from TMDB
   async getDailyTrending(): Promise<number[]> {
-    try {
-      const res = await this.client.get('/trending/movie/day');
-      return (res.data.results || []).map((m: any) => m.id);
-    } catch (e: any) {
-      console.error('[TMDB] getDailyTrending error:', e.message);
-      return [];
-    }
+    const res = await this.requestWithRetry(() => this.client.get('/trending/movie/day'));
+    return (res?.data?.results || []).map((m: any) => m.id);
   }
 
   /// Fetches weekly trending movies from TMDB
   async getWeeklyTrending(): Promise<number[]> {
-    try {
-      const res = await this.client.get('/trending/movie/week');
-      return (res.data.results || []).map((m: any) => m.id);
-    } catch (e: any) {
-      console.error('[TMDB] getWeeklyTrending error:', e.message);
-      return [];
-    }
+    const res = await this.requestWithRetry(() => this.client.get('/trending/movie/week'));
+    return (res?.data?.results || []).map((m: any) => m.id);
   }
 
   /// Fetches top rated movies from TMDB
   async getTopRated(): Promise<number[]> {
-    try {
-      const res = await this.client.get('/movie/top_rated');
-      return (res.data.results || []).map((m: any) => m.id);
-    } catch (e: any) {
-      console.error('[TMDB] getTopRated error:', e.message);
-      return [];
-    }
+    const res = await this.requestWithRetry(() => this.client.get('/movie/top_rated'));
+    return (res?.data?.results || []).map((m: any) => m.id);
   }
 
   /// Fetches comprehensive movie details including keywords, cast, crew, videos, and collection
   async getMovieDetails(tmdbId: number): Promise<TmdbMovieDetails | null> {
     try {
       await this.delay(100);
-      const res = await this.client.get(`/movie/${tmdbId}`, {
-        params: {
-          append_to_response: 'keywords,credits,videos',
-        },
-      });
-      return res.data;
-    } catch (e: any) {
-      if (e.response?.status !== 404) {
-        console.error(`[TMDB] getMovieDetails (${tmdbId}) error:`, e.message);
-      }
+      const res = await this.requestWithRetry(() =>
+        this.client.get(`/movie/${tmdbId}`, {
+          params: {
+            append_to_response: 'keywords,credits,videos',
+          },
+        })
+      );
+      return res?.data || null;
+    } catch {
       return null;
     }
   }
 
+  /// Wikipedia Arabic Interlanguage Fallback
+  async getWikipediaArabicTitle(title: string): Promise<string | undefined> {
+    try {
+      if (!title || title.trim().length < 2) return undefined;
+      const url = `https://en.wikipedia.org/w/api.php?action=query&prop=langlinks&lllang=ar&titles=${encodeURIComponent(title)}&redirects=1&format=json`;
+      const res = await axios.get(url, {
+        headers: { 'User-Agent': 'TeraflixBot/1.0 (contact@teraflix.app)' },
+        timeout: 4000,
+      });
+
+      const pages = res.data?.query?.pages || {};
+      for (const k in pages) {
+        const ll = pages[k]?.langlinks;
+        if (ll && ll[0]?.['*']) {
+          const ar = ll[0]['*'].replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+          if (ar.length > 0) return ar;
+        }
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   /// Fetches Arabic localized metadata (title, overview, tagline, cast_ar)
-  async getArabicMetadata(tmdbId: number): Promise<{
+  async getArabicMetadata(tmdbId: number, englishTitle?: string): Promise<{
     titleAr?: string;
     overviewAr?: string;
     taglineAr?: string;
@@ -163,8 +186,15 @@ export class TmdbService {
           profile_path: c.profile_path,
         }));
 
+      let titleAr = data.title && data.title !== data.original_title ? data.title : undefined;
+
+      // Cooperative Wikipedia Arabic Fallback if TMDB has no Arabic title
+      if (!titleAr && englishTitle) {
+        titleAr = await this.getWikipediaArabicTitle(englishTitle);
+      }
+
       return {
-        titleAr: data.title && data.title !== data.original_title ? data.title : undefined,
+        titleAr,
         overviewAr: data.overview && data.overview.trim().length > 0 ? data.overview : undefined,
         taglineAr: data.tagline && data.tagline.trim().length > 0 ? data.tagline : undefined,
         castJsonAr: castAr.length > 0 ? castAr : undefined,
@@ -179,10 +209,12 @@ export class TmdbService {
     const tmdbIds: number[] = [];
     try {
       for (let page = 1; page <= pages; page++) {
-        const res = await this.client.get(`/trending/movie/${timeWindow}`, {
-          params: { page },
-        });
-        const results = res.data?.results || [];
+        const res = await this.requestWithRetry(() =>
+          this.client.get(`/trending/movie/${timeWindow}`, {
+            params: { page },
+          })
+        );
+        const results = res?.data?.results || [];
         results.forEach((m: any) => {
           if (m.id) tmdbIds.push(m.id);
         });
@@ -201,8 +233,8 @@ export class TmdbService {
       if (year && year.length >= 4) {
         params.primary_release_year = year.substring(0, 4);
       }
-      const res = await this.client.get('/search/movie', { params });
-      const results = res.data.results || [];
+      const res = await this.requestWithRetry(() => this.client.get('/search/movie', { params }));
+      const results = res?.data?.results || [];
       if (results.length > 0) {
         return await this.getMovieDetails(results[0].id);
       }

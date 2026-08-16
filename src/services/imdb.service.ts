@@ -15,6 +15,7 @@ export interface OmdbMovieData {
 
 export class ImdbService {
   private omdbKeys: string[] = [];
+  private keyCooldowns: Map<string, number> = new Map();
   private currentKeyIndex = 0;
 
   constructor() {
@@ -29,42 +30,56 @@ export class ImdbService {
   async getImdbData(imdbId: string): Promise<OmdbMovieData | null> {
     if (!imdbId || !imdbId.startsWith('tt')) return null;
 
-    // 1. Try OMDb API keys in rotation
+    const now = Date.now();
+
+    // 1. Try healthy OMDb API keys in rotation
     for (let i = 0; i < this.omdbKeys.length; i++) {
       const key = this.omdbKeys[(this.currentKeyIndex + i) % this.omdbKeys.length];
+      
+      // Skip if key is on active cooldown (e.g. rate limit exhausted)
+      const cooldownUntil = this.keyCooldowns.get(key) || 0;
+      if (cooldownUntil > now) {
+        continue;
+      }
+
       try {
         const res = await axios.get('https://www.omdbapi.com/', {
           params: { apikey: key, i: imdbId },
           timeout: 5000,
         });
 
-        if (res.data && res.data.Response === 'True') {
-          const d = res.data;
-          const imdbRating = parseFloat(d.imdbRating) || undefined;
-          const imdbVotes = parseInt((d.imdbVotes || '').replace(/,/g, ''), 10) || undefined;
-          const metascore = parseInt(d.Metascore, 10) || undefined;
-          const awards = d.Awards !== 'N/A' ? d.Awards : undefined;
-          const rated = d.Rated !== 'N/A' ? d.Rated : undefined;
-          const boxOffice = d.BoxOffice !== 'N/A' ? d.BoxOffice : undefined;
+        if (res.data) {
+          if (res.data.Response === 'True') {
+            const d = res.data;
+            const imdbRating = parseFloat(d.imdbRating) || undefined;
+            const imdbVotes = parseInt((d.imdbVotes || '').replace(/,/g, ''), 10) || undefined;
+            const metascore = parseInt(d.Metascore, 10) || undefined;
+            const awards = d.Awards !== 'N/A' ? d.Awards : undefined;
+            const rated = d.Rated !== 'N/A' ? d.Rated : undefined;
+            const boxOffice = d.BoxOffice !== 'N/A' ? d.BoxOffice : undefined;
 
-          // Parse Rotten Tomatoes score (e.g. "93%")
-          let rtScore: number | undefined;
-          const rtRating = (d.Ratings || []).find((r: any) => r.Source === 'Rotten Tomatoes');
-          if (rtRating && rtRating.Value) {
-            rtScore = parseInt(rtRating.Value.replace('%', ''), 10) || undefined;
+            // Parse Rotten Tomatoes score (e.g. "93%")
+            let rtScore: number | undefined;
+            const rtRating = (d.Ratings || []).find((r: any) => r.Source === 'Rotten Tomatoes');
+            if (rtRating && rtRating.Value) {
+              rtScore = parseInt(rtRating.Value.replace('%', ''), 10) || undefined;
+            }
+
+            return {
+              imdbId,
+              imdbRating,
+              imdbVotes,
+              rottenTomatoesScore: rtScore,
+              metascore,
+              awards,
+              rated,
+              boxOffice,
+              isTop250: imdbRating !== undefined && imdbRating >= 8.3 && (imdbVotes ?? 0) > 100000,
+            };
+          } else if (res.data.Error && /limit|exhausted|invalid/i.test(res.data.Error)) {
+            // Set 15-minute cooldown for exhausted keys
+            this.keyCooldowns.set(key, now + 15 * 60 * 1000);
           }
-
-          return {
-            imdbId,
-            imdbRating,
-            imdbVotes,
-            rottenTomatoesScore: rtScore,
-            metascore,
-            awards,
-            rated,
-            boxOffice,
-            isTop250: imdbRating !== undefined && imdbRating >= 8.3 && (imdbVotes ?? 0) > 100000,
-          };
         }
       } catch {
         // Rotate key on rate limit / network error
