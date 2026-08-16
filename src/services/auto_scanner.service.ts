@@ -70,7 +70,7 @@ export class AutoScannerService {
     const supabase = SupabaseService.getClient();
     const { data: movies, error } = await supabase
       .from('movies')
-      .select('id, title, year, release_date, tmdb_id, imdb_id, title_ar, overview_ar, tagline_ar, enriched_at, studios_json')
+      .select('id, title, tmdb_title, year, release_date, tmdb_id, imdb_id, title_ar, overview_ar, tagline_ar, enriched_at, studios_json')
       .is('enriched_at', null)
       .order('popularity', { ascending: false, nullsFirst: false })
       .limit(batchSize);
@@ -108,7 +108,7 @@ export class AutoScannerService {
         // Query next batch of unenriched titles (sorted by popularity for maximum user impact first)
         const { data: movies, error } = await supabase
           .from('movies')
-          .select('id, title, year, release_date, tmdb_id, imdb_id, title_ar, overview_ar, tagline_ar, enriched_at, studios_json')
+          .select('id, title, tmdb_title, year, release_date, tmdb_id, imdb_id, title_ar, overview_ar, tagline_ar, enriched_at, studios_json')
           .is('enriched_at', null)
           .order('popularity', { ascending: false, nullsFirst: false })
           .limit(30);

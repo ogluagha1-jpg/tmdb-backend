@@ -69,9 +69,17 @@ export class CategorizerService {
       }
 
       if (!tmdbDetails) {
-        const cleaned = this.cleanTitle(movie.title);
-        if (cleaned.length > 0) {
-          tmdbDetails = await this.tmdb.searchMovie(cleaned, movie.year || movie.release_date);
+        // Priority 1: Search using populated clean TMDB title from database
+        if (movie.tmdb_title && typeof movie.tmdb_title === 'string' && movie.tmdb_title.trim().length > 0) {
+          tmdbDetails = await this.tmdb.searchMovie(movie.tmdb_title.trim(), movie.year || movie.release_date);
+        }
+
+        // Priority 2: Fallback to searching with 50+ tag sanitized raw title
+        if (!tmdbDetails) {
+          const cleaned = this.cleanTitle(movie.title);
+          if (cleaned.length > 0) {
+            tmdbDetails = await this.tmdb.searchMovie(cleaned, movie.year || movie.release_date);
+          }
         }
       }
 
