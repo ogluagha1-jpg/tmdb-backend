@@ -117,7 +117,7 @@ export class CategorizerService {
         name: k.name,
       }));
 
-      // Standardize production studios / companies
+      // Standardize production studios / companies (Pure TMDB Production Companies only)
       const studiosJson = (tmdbDetails.production_companies || []).map((s: any) => ({
         id: s.id,
         name: s.name,

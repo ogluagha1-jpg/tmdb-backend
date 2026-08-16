@@ -178,33 +178,4 @@ export class TmdbService {
       return null;
     }
   }
-
-  /// Fetches streaming watch providers for a movie (Netflix, Apple TV+, Amazon, etc.)
-  /// Returns deduplicated flat list of provider IDs across US, SA, AE regions
-  async getWatchProviders(tmdbId: number): Promise<Array<{ id: number; name: string; logo_path: string | null }>> {
-    try {
-      await this.delay(80);
-      const res = await this.client.get(`/movie/${tmdbId}/watch/providers`);
-      const results = res.data?.results || {};
-
-      // Aggregate flatrate (streaming) providers from key regions
-      const seen = new Map<number, { id: number; name: string; logo_path: string | null }>();
-      for (const region of ['US', 'SA', 'AE', 'GB']) {
-        const flatrate = results[region]?.flatrate || [];
-        for (const p of flatrate) {
-          if (!seen.has(p.provider_id)) {
-            seen.set(p.provider_id, {
-              id: p.provider_id,
-              name: p.provider_name,
-              logo_path: p.logo_path || null,
-            });
-          }
-        }
-      }
-
-      return Array.from(seen.values());
-    } catch {
-      return [];
-    }
-  }
 }
