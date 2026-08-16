@@ -129,6 +129,21 @@ export class CategorizerService {
       const releaseDate = tmdbDetails.release_date || movie.release_date || '';
       const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : movie.year;
 
+      // Multi-Source Knowledge Graph (Wikipedia / IMDb / Wikidata)
+      const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
+      const matchedOriginal = streamingSources.matchOriginal(movie.title, tmdbDetails.title, year);
+      if (matchedOriginal) {
+        const alreadyPresent = studiosJson.some((s: any) => s.id === matchedOriginal.studioId);
+        if (!alreadyPresent) {
+          studiosJson.push({
+            id: matchedOriginal.studioId,
+            name: matchedOriginal.studioName,
+            logo_path: matchedOriginal.logoPath,
+            origin_country: 'US',
+          });
+        }
+      }
+
       // Build update payload
       const updatePayload: any = {
         tmdb_id: tmdbDetails.id,
@@ -234,24 +249,65 @@ export class CategorizerService {
     return { processed: movies.length, updated: updatedCount };
   }
 
-  /// Continuously scans and enriches all movies across the entire database catalogue
-  async startContinuousEnrichment(batchSize: number = 100): Promise<void> {
-    console.log('[CATEGORIZER] 🚀 Starting catalogue-wide movie categorization pipeline...');
-    let totalUpdated = 0;
+  /// Fast multi-source knowledge graph sync across all 10,244 titles in Supabase
+  async syncMultiSourceStreamingOriginals(batchSize: number = 200): Promise<{ processed: number; tagged: number }> {
+    const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
+    await streamingSources.initialize();
+
+    const supabase = SupabaseService.getClient();
     let offset = 0;
+    let totalTagged = 0;
+    let totalProcessed = 0;
+
+    console.log('[CATEGORIZER] 🌐 Starting Multi-Source Streaming Originals Sync across database...');
 
     while (true) {
-      const res = await this.syncUncategorizedMovies(batchSize, offset);
-      if (res.processed === 0) {
-        console.log(`[CATEGORIZER] 🎉 Full catalogue scan complete! Total updated: ${totalUpdated}`);
-        break;
-      }
-      totalUpdated += res.updated;
-      offset += res.processed;
-      console.log(`[CATEGORIZER] Pipeline progress: scanned ${offset}/10244 movies | ${totalUpdated} updated.`);
+      const { data: movies, error } = await supabase
+        .from('movies')
+        .select('id, title, tmdb_title, year, release_date, studios_json')
+        .order('id', { ascending: true })
+        .range(offset, offset + batchSize - 1);
 
-      // Short breather delay between batches
-      await new Promise((r) => setTimeout(r, 300));
+      if (error || !movies || movies.length === 0) break;
+
+      for (const movie of movies) {
+        const year = movie.year || (movie.release_date || '').slice(0, 4);
+        const match = streamingSources.matchOriginal(movie.title, movie.tmdb_title, year);
+
+        if (match) {
+          const studios = movie.studios_json || [];
+          const hasStudio = studios.some((s: any) => s.id === match.studioId);
+
+          if (!hasStudio) {
+            const updatedStudios = [
+              ...studios,
+              {
+                id: match.studioId,
+                name: match.studioName,
+                logo_path: match.logoPath,
+                origin_country: 'US',
+              },
+            ];
+
+            const { error: updateErr } = await supabase
+              .from('movies')
+              .update({ studios_json: updatedStudios })
+              .eq('id', movie.id);
+
+            if (!updateErr) {
+              totalTagged++;
+              console.log(`[CATEGORIZER] 🏷️ Tagged [${movie.id}] "${movie.title}" as ${match.studioName}`);
+            }
+          }
+        }
+      }
+
+      totalProcessed += movies.length;
+      offset += movies.length;
+      console.log(`[CATEGORIZER] Multi-source sync progress: ${offset}/10244 movies checked, ${totalTagged} originals tagged.`);
     }
+
+    console.log(`[CATEGORIZER] 🎉 Multi-Source sync finished! Tagged ${totalTagged} originals.`);
+    return { processed: totalProcessed, tagged: totalTagged };
   }
 }

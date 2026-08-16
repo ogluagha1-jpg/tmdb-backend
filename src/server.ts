@@ -145,6 +145,26 @@ app.delete('/api/categories/:id', async (req: Request, res: Response) => {
   }
 });
 
+// 9. Multi-Source Streaming Originals Knowledge Graph Sync
+let multiSourceRunning = false;
+app.post('/api/sync/multi-source', async (_req: Request, res: Response) => {
+  if (multiSourceRunning) {
+    return res.status(200).json({ success: true, message: 'Multi-source sync is already running in background.' });
+  }
+  res.status(200).json({ success: true, message: 'Multi-source sync started across all 10,244 titles. Check logs for live progress.' });
+
+  multiSourceRunning = true;
+  categorizer
+    .syncMultiSourceStreamingOriginals(200)
+    .then((r) => {
+      console.log(`[BOOT] Multi-source sync complete: Tagged ${r.tagged} originals.`);
+      generator.generateAndSyncCategories().catch(() => {});
+    })
+    .finally(() => {
+      multiSourceRunning = false;
+    });
+});
+
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 app.listen(port, () => {
@@ -158,24 +178,31 @@ app.listen(port, () => {
   // Start background schedulers
   setupCronJobs();
 
+  // Initialize Multi-Source Knowledge Graph (Wikipedia/IMDb/Wikidata)
+  import('./services/streaming_sources.service').then(({ StreamingSourcesService }) => {
+    StreamingSourcesService.getInstance()
+      .initialize()
+      .then(() => {
+        // Run multi-source catalogue sync
+        categorizer
+          .syncMultiSourceStreamingOriginals(200)
+          .then(() => {
+            console.log('[BOOT] Multi-source sync complete. Refreshing home categories...');
+            generator.generateAndSyncCategories().catch(() => {});
+          })
+          .catch((err) => {
+            console.error('[BOOT] Multi-source sync error:', err.message);
+          });
+      })
+      .catch((e) => {
+        console.error('[BOOT] StreamingSourcesService init error:', e.message);
+      });
+  });
+
   // Run initial category evaluation on boot
   console.log('[BOOT] Running initial dynamic categories scan...');
   generator
     .generateAndSyncCategories()
-    .then(() => {
-      // Start background continuous movie enrichment pipeline
-      categorizer
-        .startContinuousEnrichment(200)
-        .then(() => {
-          console.log('[BOOT] Enrichment pass finished. Refreshing home categories...');
-          generator.generateAndSyncCategories().catch((err) => {
-            console.error('[BOOT] Refresh categories failed:', err.message);
-          });
-        })
-        .catch((e) => {
-          console.error('[BOOT] Continuous enrichment error:', e.message);
-        });
-    })
     .catch((e) => {
       console.error('[BOOT] Initial category scan failed:', e.message);
     });
