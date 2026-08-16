@@ -144,6 +144,30 @@ export class CategorizerService {
         }
       }
 
+      // OMDb & Rotten Tomatoes Enrichment
+      const targetImdbId = tmdbDetails.imdb_id || movie.imdb_id;
+      if (targetImdbId) {
+        try {
+          const omdb = await this.imdb.getImdbData(targetImdbId);
+          if (omdb) {
+            if (omdb.rottenTomatoesScore) {
+              keywordsJson.push({ id: 999901, name: `Rotten Tomatoes ${omdb.rottenTomatoesScore}%` });
+              if (omdb.rottenTomatoesScore >= 85) {
+                keywordsJson.push({ id: 999902, name: 'Certified Fresh' });
+              }
+            }
+            if (omdb.awards && /oscar|academy award/i.test(omdb.awards)) {
+              keywordsJson.push({ id: 999903, name: 'Oscar Winner' });
+            }
+            if (omdb.isTop250) {
+              keywordsJson.push({ id: 999904, name: 'IMDb Top 250' });
+            }
+          }
+        } catch {
+          // Non-fatal
+        }
+      }
+
       // Build update payload
       const updatePayload: any = {
         tmdb_id: tmdbDetails.id,

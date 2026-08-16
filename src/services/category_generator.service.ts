@@ -58,6 +58,26 @@ export class CategoryGeneratorService {
 
       // 2. Prestige & Curated
       {
+        id: 'critics_fresh',
+        title: 'CERTIFIED FRESH & CRITICS CHOICE',
+        title_ar: 'اختيارات النقاد الأعلى تقييماً (Certified Fresh)',
+        category_type: 'curated',
+        genre_id: 0,
+        order_by: 'vote_average.desc',
+        filter_query: 'or=(keywords_json.cs.[{"name":"Certified Fresh"}],vote_average=gte.8.2)',
+        sort_order: 4,
+      },
+      {
+        id: 'oscar_winners',
+        title: 'ACADEMY AWARD & OSCAR WINNERS',
+        title_ar: 'روائع السينما الفائزة بجوائز الأوسكار',
+        category_type: 'curated',
+        genre_id: 0,
+        order_by: 'vote_average.desc',
+        filter_query: 'or=(keywords_json.cs.[{"name":"Oscar Winner"}],keywords_json.cs.[{"name":"academy award"}])',
+        sort_order: 5,
+      },
+      {
         id: 'imdb_top_rated',
         title: 'CRITICALLY ACCLAIMED & TOP RATED',
         title_ar: 'أعلى الأفلام تقييماً عالمياً',
@@ -65,7 +85,7 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'vote_average.desc',
         filter_query: 'vote_average=gte.8.0',
-        sort_order: 4,
+        sort_order: 6,
       },
       {
         id: 'arabic_hits',
@@ -75,7 +95,7 @@ export class CategoryGeneratorService {
         genre_id: 0,
         order_by: 'popularity.desc',
         filter_query: 'original_language=eq.ar',
-        sort_order: 5,
+        sort_order: 7,
       },
 
       // 3. High-Impact Thematic Collections
