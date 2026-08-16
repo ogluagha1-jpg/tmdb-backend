@@ -827,8 +827,8 @@ export function renderDashboardHtml(): string {
       </div>
 
       <div style="display: flex; gap: 10px; margin-top: 20px;">
-        <button class="btn btn-secondary" style="flex: 1;" onclick="closeCreateModal()">Cancel</button>
-        <button class="btn btn-primary" style="flex: 2;" onclick="submitCreateCategory()">⚡ Test & Publish Shelf</button>
+        <button class="btn btn-secondary" style="flex: 1;" onclick="window.closeCreateModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex: 2;" onclick="window.submitCreateCategory()">⚡ Test & Publish Shelf</button>
       </div>
     </div>
   </div>
@@ -836,42 +836,46 @@ export function renderDashboardHtml(): string {
   <div id="toast">Notification</div>
 
   <script>
-    function showToast(msg) {
+    window.showToast = function(msg) {
       const toast = document.getElementById('toast');
-      toast.innerText = msg;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3500);
-    }
+      if (toast) {
+        toast.innerText = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3500);
+      }
+    };
 
-    function openCreateModal() {
-      document.getElementById('create-modal').classList.add('active');
-    }
+    window.openCreateModal = function() {
+      const m = document.getElementById('create-modal');
+      if (m) m.classList.add('active');
+    };
 
-    function closeCreateModal() {
-      document.getElementById('create-modal').classList.remove('active');
-    }
+    window.closeCreateModal = function() {
+      const m = document.getElementById('create-modal');
+      if (m) m.classList.remove('active');
+    };
 
-    function applyPreset() {
+    window.applyPreset = function() {
       const select = document.getElementById('input-preset');
-      const opt = select.options[select.selectedIndex];
+      const opt = select ? select.options[select.selectedIndex] : null;
       if (opt && opt.dataset.title) {
         document.getElementById('input-title').value = opt.dataset.title;
         document.getElementById('input-title-ar').value = opt.dataset.titleAr || '';
         document.getElementById('input-query').value = opt.dataset.query || '';
       }
-    }
+    };
 
-    async function submitCreateCategory() {
+    window.submitCreateCategory = async function() {
       const title = document.getElementById('input-title').value.trim();
       const title_ar = document.getElementById('input-title-ar').value.trim();
       const filter_query = document.getElementById('input-query').value.trim();
 
       if (!title || !filter_query) {
-        showToast('⚠️ Please provide Title and Filter Query.');
+        window.showToast('⚠️ Please provide Title and Filter Query.');
         return;
       }
 
-      showToast('Testing & creating category...');
+      window.showToast('Testing & creating category...');
       try {
         const res = await fetch('/api/categories/create', {
           method: 'POST',
@@ -887,25 +891,25 @@ export function renderDashboardHtml(): string {
         const result = await res.json();
         if (!result.success) throw new Error(result.error);
 
-        showToast('🎉 Published "' + title + '" with ' + result.count + ' titles!');
-        closeCreateModal();
-        fetchMetrics();
+        window.showToast('🎉 Published "' + title + '" with ' + result.count + ' titles!');
+        window.closeCreateModal();
+        window.fetchMetrics();
       } catch (err) {
-        showToast('❌ Failed: ' + err.message);
+        window.showToast('❌ Failed: ' + err.message);
       }
-    }
+    };
 
-    async function deleteCategory(id, name) {
+    window.deleteCategory = async function(id, name) {
       if (!confirm('Are you sure you want to delete shelf "' + name + '"?')) return;
       try {
         const res = await fetch('/api/categories/' + id, { method: 'DELETE' });
         const result = await res.json();
-        showToast('🗑️ Deleted ' + name);
-        fetchMetrics();
+        window.showToast('🗑️ Deleted ' + name);
+        window.fetchMetrics();
       } catch (err) {
-        showToast('❌ Delete failed: ' + err.message);
+        window.showToast('❌ Delete failed: ' + err.message);
       }
-    }
+    };
 
     function safeSetText(id, text) {
       const el = document.getElementById(id);
@@ -917,7 +921,7 @@ export function renderDashboardHtml(): string {
       if (el) el.style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
     }
 
-    async function fetchMetrics() {
+    window.fetchMetrics = async function() {
       try {
         const res = await fetch('/api/metrics');
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -926,7 +930,7 @@ export function renderDashboardHtml(): string {
       } catch (err) {
         console.error('Fetch metrics error:', err);
       }
-    }
+    };
 
     function renderData(d) {
       if (!d) return;
@@ -935,7 +939,6 @@ export function renderDashboardHtml(): string {
         const srv = d.server || {};
         const rec = d.recentReleases || {};
 
-        // 1. Top Summary
         safeSetText('val-total-movies', (cat.totalMovies || 0).toLocaleString());
         safeSetText('val-arabic-total', (cat.withAnyArabic || 0).toLocaleString());
         safeSetWidth('prog-arabic', cat.arabicCoveragePct || 0);
@@ -944,7 +947,6 @@ export function renderDashboardHtml(): string {
         safeSetText('val-uptime', srv.uptimeFormatted || 'Live');
         safeSetText('val-memory', 'RAM: ' + (srv.memoryUsedMB || 0) + 'MB / ' + (srv.memoryTotalMB || 0) + 'MB');
 
-        // 2. Arabic Breakdown
         const tot = cat.totalMovies || 10244;
         safeSetText('val-arabic-unique-label', (cat.withAnyArabic || 0).toLocaleString() + ' Titles');
         
@@ -960,7 +962,6 @@ export function renderDashboardHtml(): string {
         safeSetText('val-tagline-ar', tagAr.toLocaleString() + ' (' + ((tagAr / tot) * 100).toFixed(1) + '%)');
         safeSetWidth('prog-tagline-ar', (tagAr / tot) * 100);
 
-        // 3. Era Breakdown
         const y26 = rec.y2026 || { translated: 0, total: 0, pct: 0 };
         safeSetText('val-y2026', y26.translated + ' / ' + y26.total + ' (' + y26.pct + '%)');
         safeSetWidth('prog-y2026', y26.pct);
@@ -973,28 +974,25 @@ export function renderDashboardHtml(): string {
         safeSetText('val-modern', mod.translated + ' / ' + mod.total + ' (' + mod.pct + '%)');
         safeSetWidth('prog-modern', mod.pct);
 
-        // 4. Studios
         const studiosContainer = document.getElementById('studios-container');
         if (studiosContainer && Array.isArray(d.studios)) {
           studiosContainer.innerHTML = '';
           d.studios.forEach(s => {
             const div = document.createElement('div');
             div.className = 'studio-pill';
-            div.innerHTML = \`
-              <div>
-                <div class="studio-name" style="display:flex; align-items:center; gap:5px;">
-                  <span style="width:6px; height:6px; border-radius:50%; background:\${s.color}; display:inline-block;"></span>
-                  \${s.name}
-                </div>
-                <div class="studio-name-ar">\${s.nameAr || ''}</div>
-              </div>
-              <div class="studio-count-badge" style="color: \${s.count >= 6 ? '#10B981' : '#F59E0B'}">\${s.count || 0}</div>
-            \`;
+            div.innerHTML = 
+              '<div>' +
+                '<div class="studio-name" style="display:flex; align-items:center; gap:5px;">' +
+                  '<span style="width:6px; height:6px; border-radius:50%; background:' + (s.color || '#E50914') + '; display:inline-block;"></span>' +
+                  s.name +
+                '</div>' +
+                '<div class="studio-name-ar">' + (s.nameAr || '') + '</div>' +
+              '</div>' +
+              '<div class="studio-count-badge" style="color: ' + (s.count >= 6 ? '#10B981' : '#F59E0B') + '">' + (s.count || 0) + '</div>';
             studiosContainer.appendChild(div);
           });
         }
 
-        // 5. Categories Table
         const tbody = document.getElementById('categories-tbody');
         const cats = d.categories || [];
         safeSetText('categories-count-badge', cats.length + ' Published Shelves');
@@ -1003,17 +1001,16 @@ export function renderDashboardHtml(): string {
           tbody.innerHTML = '';
           cats.forEach(c => {
             const tr = document.createElement('tr');
-            tr.innerHTML = \`
-              <td><strong>#\${c.sort_order}</strong></td>
-              <td style="font-weight:600; color:white;">\${c.title}</td>
-              <td style="direction:rtl; text-align:right;">\${c.title_ar || '-'}</td>
-              <td><span style="text-transform:uppercase; font-size:10px; opacity:0.8;">\${c.category_type}</span></td>
-              <td><strong style="color:#10B981;">\${(c.movie_count || 0).toLocaleString()} titles</strong></td>
-              <td><span class="pill-published">Live</span></td>
-              <td>
-                <button class="btn-delete" onclick="deleteCategory('\${c.id}', '\${(c.title || '').replace(/'/g, "\\\\'")}')">🗑️</button>
-              </td>
-            \`;
+            tr.innerHTML = 
+              '<td><strong>#' + c.sort_order + '</strong></td>' +
+              '<td style="font-weight:600; color:white;">' + c.title + '</td>' +
+              '<td style="direction:rtl; text-align:right;">' + (c.title_ar || '-') + '</td>' +
+              '<td><span style="text-transform:uppercase; font-size:10px; opacity:0.8;">' + c.category_type + '</span></td>' +
+              '<td><strong style="color:#10B981;">' + (c.movie_count || 0).toLocaleString() + ' titles</strong></td>' +
+              '<td><span class="pill-published">Live</span></td>' +
+              '<td>' +
+                '<button class="btn-delete" onclick="window.deleteCategory(\'' + c.id + '\', \'' + (c.title || '').replace(/'/g, "\\'") + '\')">🗑️</button>' +
+              '</td>';
             tbody.appendChild(tr);
           });
         }
@@ -1024,7 +1021,7 @@ export function renderDashboardHtml(): string {
 
     let autoScannerRunning = true;
 
-    async function fetchScannerStatus() {
+    window.fetchScannerStatus = async function() {
       try {
         const res = await fetch('/api/scan/status');
         if (!res.ok) return;
@@ -1059,93 +1056,93 @@ export function renderDashboardHtml(): string {
       } catch (err) {
         console.error('Scanner status error:', err);
       }
-    }
+    };
 
-    async function toggleAutoScanner() {
+    window.toggleAutoScanner = async function() {
       try {
         if (autoScannerRunning) {
           await fetch('/api/scan/stop', { method: 'POST' });
-          showToast('⏸️ Continuous Auto-Scanner Paused.');
+          window.showToast('⏸️ Continuous Auto-Scanner Paused.');
         } else {
           await fetch('/api/scan/start', { method: 'POST' });
-          showToast('🟢 Continuous 24/7 Auto-Scanner Resumed!');
+          window.showToast('🟢 Continuous 24/7 Auto-Scanner Resumed!');
         }
-        setTimeout(fetchScannerStatus, 500);
+        setTimeout(window.fetchScannerStatus, 500);
       } catch (err) {
-        showToast('❌ Error: ' + err.message);
+        window.showToast('❌ Error: ' + err.message);
       }
-    }
+    };
 
-    async function triggerBatchScan(limit = 500) {
-      showToast('⚡ Triggering batch scan of next ' + limit + ' movies...');
+    window.triggerBatchScan = async function(limit = 500) {
+      window.showToast('⚡ Triggering batch scan of next ' + limit + ' movies...');
       try {
         const res = await fetch('/api/scan/batch?limit=' + limit, { method: 'POST' });
         const result = await res.json();
-        showToast('✓ ' + (result.message || 'Batch scan complete!'));
-        setTimeout(fetchMetrics, 1000);
-        setTimeout(fetchScannerStatus, 1000);
+        window.showToast('✓ ' + (result.message || 'Batch scan complete!'));
+        setTimeout(window.fetchMetrics, 1000);
+        setTimeout(window.fetchScannerStatus, 1000);
       } catch (err) {
-        showToast('❌ Batch scan failed: ' + err.message);
+        window.showToast('❌ Batch scan failed: ' + err.message);
       }
-    }
+    };
 
-    async function triggerMultiSourceSync() {
-      showToast('🌐 Triggering Knowledge Graph sync (Netflix / Apple / Amazon)...');
+    window.triggerMultiSourceSync = async function() {
+      window.showToast('🌐 Triggering Knowledge Graph sync (Netflix / Apple / Amazon)...');
       try {
         const res = await fetch('/api/sync/multi-source', { method: 'POST' });
         const result = await res.json();
-        showToast('✓ ' + (result.message || 'Multi-source sync started!'));
-        setTimeout(fetchMetrics, 2000);
+        window.showToast('✓ ' + (result.message || 'Multi-source sync started!'));
+        setTimeout(window.fetchMetrics, 2000);
       } catch (err) {
-        showToast('❌ Knowledge Graph sync failed: ' + err.message);
+        window.showToast('❌ Knowledge Graph sync failed: ' + err.message);
       }
-    }
+    };
 
-    async function triggerMovieSync() {
-      showToast('⚡ Triggering background enrichment batch...');
+    window.triggerMovieSync = async function() {
+      window.showToast('⚡ Triggering background enrichment batch...');
       try {
         const res = await fetch('/api/sync/movies?batch=100', { method: 'POST' });
         const result = await res.json();
-        showToast('✓ ' + (result.result?.message || 'Batch executed successfully!'));
-        setTimeout(fetchMetrics, 1200);
+        window.showToast('✓ ' + (result.result?.message || 'Batch executed successfully!'));
+        setTimeout(window.fetchMetrics, 1200);
       } catch (err) {
-        showToast('❌ Sync failed: ' + err.message);
+        window.showToast('❌ Sync failed: ' + err.message);
       }
-    }
+    };
 
-    async function triggerResetAndRescan() {
+    window.triggerResetAndRescan = async function() {
       const ok = confirm('⚠️ Reset and Rescan Database from Scratch?\n\nThis will reset all movie enrichment timestamps in Supabase and restart the 24/7 background auto-scanner from movie #1 across all 10,244 titles.\n\nAre you sure you want to proceed?');
       if (!ok) return;
 
-      showToast('🔄 Resetting timestamps and starting fresh scan from scratch...');
+      window.showToast('🔄 Resetting timestamps and starting fresh scan from scratch...');
       try {
         const res = await fetch('/api/scan/reset', { method: 'POST' });
         const result = await res.json();
-        showToast('✓ ' + (result.message || 'Database rescan initiated!'));
-        setTimeout(fetchMetrics, 1000);
-        setTimeout(fetchScannerStatus, 1000);
+        window.showToast('✓ ' + (result.message || 'Database rescan initiated!'));
+        setTimeout(window.fetchMetrics, 1000);
+        setTimeout(window.fetchScannerStatus, 1000);
       } catch (err) {
-        showToast('❌ Reset failed: ' + err.message);
+        window.showToast('❌ Reset failed: ' + err.message);
       }
-    }
+    };
 
-    async function triggerRegenerateCategories() {
-      showToast('🔄 Regenerating home categories...');
+    window.triggerRegenerateCategories = async function() {
+      window.showToast('🔄 Regenerating home categories...');
       try {
         const res = await fetch('/api/sync/categories', { method: 'POST' });
         const result = await res.json();
-        showToast('✓ Published ' + (result.result?.published || 0) + ' home categories!');
-        setTimeout(fetchMetrics, 1200);
+        window.showToast('✓ Published ' + (result.result?.published || 0) + ' home categories!');
+        setTimeout(window.fetchMetrics, 1200);
       } catch (err) {
-        showToast('❌ Failed: ' + err.message);
+        window.showToast('❌ Failed: ' + err.message);
       }
-    }
+    };
 
     // Initial load + auto-refresh
-    fetchMetrics();
-    fetchScannerStatus();
-    setInterval(fetchMetrics, 10000);
-    setInterval(fetchScannerStatus, 4000);
+    window.fetchMetrics();
+    window.fetchScannerStatus();
+    setInterval(window.fetchMetrics, 10000);
+    setInterval(window.fetchScannerStatus, 4000);
   </script>
 </body>
 </html>`;
