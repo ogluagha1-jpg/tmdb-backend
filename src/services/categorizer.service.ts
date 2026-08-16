@@ -209,7 +209,7 @@ export class CategorizerService {
         }
       }
 
-      // ── BUILD UNIFIED UPDATE PAYLOAD WITH COMPREHENSIVE FALLBACKS ──
+      // ── BUILD CORE SERVER PAYLOAD (ARABIC LOCALIZATION, STUDIOS, & CATEGORIES METADATA) ──
       const updatePayload: any = {
         tmdb_id: tmdbDetails?.id || movie.tmdb_id,
         tmdb_title: tmdbDetails?.title || cinemetaMeta?.name || movie.title,
@@ -232,23 +232,11 @@ export class CategorizerService {
         imdb_id: targetImdbId,
       };
 
-      // Poster fallback: TMDB -> Cinemeta -> OMDb
-      if (tmdbDetails?.poster_path) {
-        updatePayload.poster_path = tmdbDetails.poster_path;
-      } else if (cinemetaMeta?.poster && !movie.poster_path) {
-        updatePayload.poster_path = cinemetaMeta.poster;
-      }
-
-      // Backdrop fallback: TMDB -> Cinemeta
-      if (tmdbDetails?.backdrop_path) {
-        updatePayload.backdrop_path = tmdbDetails.backdrop_path;
-      } else if (cinemetaMeta?.background && !movie.backdrop_path) {
-        updatePayload.backdrop_path = cinemetaMeta.background;
-      }
-
+      // Arabic localization: Title, Overview, Tagline, Cast
       if (arMeta.titleAr) updatePayload.title_ar = arMeta.titleAr;
       if (arMeta.overviewAr) updatePayload.overview_ar = arMeta.overviewAr;
       if (arMeta.taglineAr) updatePayload.tagline_ar = arMeta.taglineAr;
+      if (arMeta.castJsonAr) updatePayload.cast_json_ar = arMeta.castJsonAr;
 
       // Update database row
       const { error: updateErr } = await supabase

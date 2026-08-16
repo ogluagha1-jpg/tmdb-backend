@@ -139,20 +139,35 @@ export class TmdbService {
     }
   }
 
-  /// Fetches Arabic localized metadata (title, overview, tagline)
-  async getArabicMetadata(tmdbId: number): Promise<{ titleAr?: string; overviewAr?: string; taglineAr?: string }> {
+  /// Fetches Arabic localized metadata (title, overview, tagline, cast_ar)
+  async getArabicMetadata(tmdbId: number): Promise<{
+    titleAr?: string;
+    overviewAr?: string;
+    taglineAr?: string;
+    castJsonAr?: any[];
+  }> {
     try {
       await this.delay(100);
-      const res = await this.client.get(`/movie/${tmdbId}`, {
-        params: {
-          language: 'ar-SA',
-        },
-      });
-      const data = res.data;
+      const [detailsRes, creditsRes] = await Promise.all([
+        this.client.get(`/movie/${tmdbId}`, { params: { language: 'ar-SA' } }).catch(() => null),
+        this.client.get(`/movie/${tmdbId}/credits`, { params: { language: 'ar-SA' } }).catch(() => null),
+      ]);
+
+      const data = detailsRes?.data || {};
+      const castAr = (creditsRes?.data?.cast || [])
+        .slice(0, 10)
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character,
+          profile_path: c.profile_path,
+        }));
+
       return {
         titleAr: data.title && data.title !== data.original_title ? data.title : undefined,
         overviewAr: data.overview && data.overview.trim().length > 0 ? data.overview : undefined,
         taglineAr: data.tagline && data.tagline.trim().length > 0 ? data.tagline : undefined,
+        castJsonAr: castAr.length > 0 ? castAr : undefined,
       };
     } catch {
       return {};
