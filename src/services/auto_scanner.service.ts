@@ -65,6 +65,35 @@ export class AutoScannerService {
     console.log('[AUTO-SCANNER] ⏸️ Auto-scanner paused by admin.');
   }
 
+  /// Reset all movie enrichment timestamps and start full rescan from scratch
+  public async resetAndRescanAll(): Promise<{ resetCount: number }> {
+    const supabase = SupabaseService.getClient();
+    console.log('[AUTO-SCANNER] 🔄 Initiating full database rescan from scratch...');
+
+    // Reset enriched_at across all records in Supabase
+    const { count, error } = await supabase
+      .from('movies')
+      .update({ enriched_at: null }, { count: 'exact' })
+      .not('id', 'is', null);
+
+    if (error) {
+      console.error('[AUTO-SCANNER] Error resetting enriched_at:', error.message);
+    }
+
+    // Reset runtime counters
+    this.totalProcessedThisSession = 0;
+    this.currentBatchOffset = 0;
+    this.lastError = null;
+    this.startedAt = new Date().toISOString();
+    this.lastActiveAt = new Date().toISOString();
+    this.isPaused = false;
+
+    // Start fresh continuous loop
+    this.start();
+
+    return { resetCount: count || 10244 };
+  }
+
   /// Trigger a single discrete batch scan
   public async scanBatch(batchSize: number = 200): Promise<{ processed: number; updated: number }> {
     const supabase = SupabaseService.getClient();

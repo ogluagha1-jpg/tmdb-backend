@@ -596,8 +596,9 @@ export function renderDashboardHtml(): string {
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button id="btn-toggle-scan" class="btn btn-secondary" onclick="toggleAutoScanner()" style="font-weight: 700;">⏸️ Pause Auto-Scan</button>
           <button class="btn btn-primary" onclick="triggerBatchScan(500)" style="font-weight: 700;">⚡ Scan Next 500 Batch</button>
+          <button class="btn btn-secondary" onclick="triggerResetAndRescan()" style="border-color: rgba(229, 9, 20, 0.6); color: #FF9999; font-weight: 700; background: rgba(229, 9, 20, 0.1);">🔄 Rescan All From Scratch</button>
           <button class="btn btn-secondary" onclick="triggerMultiSourceSync()">🌐 Knowledge Graph Sync</button>
-          <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">🔄 Regenerate Shelves</button>
+          <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">📁 Regenerate Shelves</button>
         </div>
       </div>
 
@@ -1086,6 +1087,22 @@ export function renderDashboardHtml(): string {
         setTimeout(fetchMetrics, 1200);
       } catch (err) {
         showToast('❌ Sync failed: ' + err.message);
+      }
+    }
+
+    async function triggerResetAndRescan() {
+      const ok = confirm('⚠️ Reset and Rescan Database from Scratch?\n\nThis will reset all movie enrichment timestamps in Supabase and restart the 24/7 background auto-scanner from movie #1 across all 10,244 titles.\n\nAre you sure you want to proceed?');
+      if (!ok) return;
+
+      showToast('🔄 Resetting timestamps and starting fresh scan from scratch...');
+      try {
+        const res = await fetch('/api/scan/reset', { method: 'POST' });
+        const result = await res.json();
+        showToast('✓ ' + (result.message || 'Database rescan initiated!'));
+        setTimeout(fetchMetrics, 1000);
+        setTimeout(fetchScannerStatus, 1000);
+      } catch (err) {
+        showToast('❌ Reset failed: ' + err.message);
       }
     }
 

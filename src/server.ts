@@ -210,6 +210,21 @@ app.post('/api/scan/batch', async (req: Request, res: Response) => {
   }
 });
 
+// 14. Reset All Enrichment & Rescan Database From Scratch
+app.post('/api/scan/reset', async (_req: Request, res: Response) => {
+  try {
+    const { AutoScannerService } = await import('./services/auto_scanner.service');
+    const result = await AutoScannerService.getInstance().resetAndRescanAll();
+    res.status(200).json({
+      success: true,
+      message: `Database enrichment timestamps reset. Full rescan from scratch initiated across all ${result.resetCount} titles!`,
+      result,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 const server = app.listen(port, () => {
