@@ -97,7 +97,7 @@ export class CategorizerService {
       }
 
       // Standardize cast
-      const castJson = (tmdbDetails.credits?.cast || [])
+      let castJson = (tmdbDetails.credits?.cast || [])
         .slice(0, 10)
         .map((c: any) => ({
           id: c.id,
@@ -165,6 +165,33 @@ export class CategorizerService {
           }
         } catch {
           // Non-fatal
+        }
+
+        // Cinemeta Open CDN Fallback (For missing trailers, directors, cast)
+        if (!trailerKey || !director || castJson.length === 0) {
+          try {
+            const cinemeta = await (await import('./cinemeta.service')).CinemetaService.getInstance().getMeta(targetImdbId);
+            if (cinemeta) {
+              if (!director && cinemeta.director && cinemeta.director.length > 0) {
+                director = cinemeta.director[0];
+              }
+              if (castJson.length === 0 && cinemeta.cast && cinemeta.cast.length > 0) {
+                castJson = cinemeta.cast.slice(0, 10).map((name: string, idx: number) => ({
+                  id: 888000 + idx,
+                  name,
+                  character: '',
+                  profile_path: null,
+                }));
+              }
+              if (!trailerKey && cinemeta.trailers && cinemeta.trailers.length > 0) {
+                trailerKey = cinemeta.trailers[0].source;
+                trailerSite = 'YouTube';
+                trailerUrl = `https://www.youtube.com/watch?v=${trailerKey}`;
+              }
+            }
+          } catch {
+            // Non-fatal
+          }
         }
       }
 
