@@ -125,69 +125,6 @@ export class CategorizerService {
         origin_country: s.origin_country || null,
       }));
 
-      // ── Hybrid Streaming Platform Detection ──
-      // If a movie streams on Netflix/Apple/Amazon AND has NO major traditional
-      // studio in its production companies, inject the platform as a studio tag.
-      // This catches Netflix originals (Bird Box, Red Notice, etc.) that are
-      // produced by partner studios, while avoiding false positives (e.g.
-      // Spider-Man streams on Netflix but is a Sony/Marvel production).
-      const MAJOR_STUDIO_IDS = new Set([
-        // Warner Bros & New Line
-        174, 429, 9993, 12, 128064,
-        // Universal & Focus Features
-        33, 67, 33413, 10338, 10146,
-        // Sony / Columbia / TriStar
-        5, 34, 84, 2251, 559,
-        // Paramount
-        4, 24955, 2348, 8302, 333,
-        // Disney & Pixar & Marvel
-        2, 6125, 5218, 3, 420, 32353, 11106, 13252,
-        // 20th Century & Searchlight
-        127928, 25, 787, 9383, 43,
-        // Lionsgate
-        1632, 35, 85885, 1634,
-        // DreamWorks
-        521, 7,
-        // MGM
-        21, 8411, 155700,
-        // Other Distinct Theatrical Studios
-        3172, 923, 41077, 10342, 14,
-      ]);
-
-      // Streaming platform definitions: TMDB Watch Provider ID → studio entry to inject
-      const STREAMING_PLATFORMS = [
-        { providerId: 8, studioId: 178464, name: 'Netflix', logo: '/pbpMk2JmcoNnQwB5JGpXAbmLui6.png', country: 'US' },
-        { providerId: 1796, studioId: 178464, name: 'Netflix', logo: '/pbpMk2JmcoNnQwB5JGpXAbmLui6.png', country: 'US' }, // Netflix with Ads
-        { providerId: 350, studioId: 194232, name: 'Apple Studios', logo: '/4KAy34EHvRM25Ih8wb82AuGU7zJ.png', country: 'US' },
-        { providerId: 9, studioId: 20580, name: 'Amazon Studios', logo: '/5GIBEqGoNzhAGkwGMzgdUiMFhIP.png', country: 'US' },
-        { providerId: 119, studioId: 20580, name: 'Amazon Studios', logo: '/5GIBEqGoNzhAGkwGMzgdUiMFhIP.png', country: 'US' }, // Amazon Prime Video
-      ];
-
-      const hasMajorStudio = studiosJson.some((s: any) => MAJOR_STUDIO_IDS.has(s.id));
-
-      if (!hasMajorStudio && tmdbDetails.id) {
-        try {
-          const watchProviders = await this.tmdb.getWatchProviders(tmdbDetails.id);
-          const watchProviderIds = new Set(watchProviders.map(p => p.id));
-          const injectedIds = new Set(studiosJson.map((s: any) => s.id));
-
-          for (const platform of STREAMING_PLATFORMS) {
-            if (watchProviderIds.has(platform.providerId) && !injectedIds.has(platform.studioId)) {
-              studiosJson.push({
-                id: platform.studioId,
-                name: platform.name,
-                logo_path: platform.logo,
-                origin_country: platform.country,
-              });
-              injectedIds.add(platform.studioId);
-              console.log(`[CATEGORIZER] 🏷️ Injected "${platform.name}" for "${tmdbDetails.title}" (streams on ${platform.name}, no major studio)`);
-            }
-          }
-        } catch (wpErr: any) {
-          // Non-fatal: continue without watch provider enrichment
-        }
-      }
-
       // Extract release year
       const releaseDate = tmdbDetails.release_date || movie.release_date || '';
       const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : movie.year;

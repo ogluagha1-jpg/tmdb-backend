@@ -145,127 +145,6 @@ app.delete('/api/categories/:id', async (req: Request, res: Response) => {
   }
 });
 
-// 9. Watch Provider Re-Scan: Injects streaming platform tags into existing enriched movies
-let wpScanOffset = 0;
-let wpScanRunning = false;
-
-app.post('/api/sync/watch-providers', async (req: Request, res: Response) => {
-  if (wpScanRunning) {
-    return res.status(200).json({ success: true, message: 'Watch provider scan already running in background.' });
-  }
-  const batchSize = parseInt(req.query.batch as string, 10) || 50;
-  const fullScan = req.query.full === 'true';
-  if (fullScan) wpScanOffset = 0;
-
-  res.status(200).json({ success: true, message: `Watch provider re-scan started from offset ${wpScanOffset}. Check logs for progress.` });
-
-  // Run in background
-  wpScanRunning = true;
-  runWatchProviderScan(batchSize).finally(() => { wpScanRunning = false; });
-});
-
-async function runWatchProviderScan(batchSize: number) {
-  const supabase = SupabaseService.getClient();
-  const tmdb = new (await import('./services/tmdb.service')).TmdbService();
-  let totalInjected = 0;
-
-  // Major studio IDs — movies with these are NOT streaming originals
-  const MAJOR_STUDIO_IDS = new Set([
-    // Warner Bros & New Line
-    174, 429, 9993, 12, 128064,
-    // Universal & Focus Features
-    33, 67, 33413, 10338, 10146,
-    // Sony / Columbia / TriStar
-    5, 34, 84, 2251, 559,
-    // Paramount
-    4, 24955, 2348, 8302, 333,
-    // Disney & Pixar & Marvel
-    2, 6125, 5218, 3, 420, 32353, 11106, 13252,
-    // 20th Century & Searchlight
-    127928, 25, 787, 9383, 43,
-    // Lionsgate
-    1632, 35, 85885, 1634,
-    // DreamWorks
-    521, 7,
-    // MGM
-    21, 8411, 155700,
-    // Other Distinct Theatrical Studios
-    3172, 923, 41077, 10342, 14,
-  ]);
-  const STREAMING_PLATFORMS = [
-    { providerId: 8, studioId: 178464, name: 'Netflix', logo: '/pbpMk2JmcoNnQwB5JGpXAbmLui6.png', country: 'US' },
-    { providerId: 1796, studioId: 178464, name: 'Netflix', logo: '/pbpMk2JmcoNnQwB5JGpXAbmLui6.png', country: 'US' },
-    { providerId: 350, studioId: 194232, name: 'Apple Studios', logo: '/4KAy34EHvRM25Ih8wb82AuGU7zJ.png', country: 'US' },
-    { providerId: 9, studioId: 20580, name: 'Amazon Studios', logo: '/5GIBEqGoNzhAGkwGMzgdUiMFhIP.png', country: 'US' },
-    { providerId: 119, studioId: 20580, name: 'Amazon Studios', logo: '/5GIBEqGoNzhAGkwGMzgdUiMFhIP.png', country: 'US' },
-  ];
-  const STREAMING_STUDIO_IDS = new Set(STREAMING_PLATFORMS.map(p => p.studioId));
-
-  console.log(`[WP-SCAN] 🚀 Starting watch provider re-scan from offset ${wpScanOffset}...`);
-
-  while (true) {
-    const { data: movies, error } = await supabase
-      .from('movies')
-      .select('id, tmdb_id, studios_json')
-      .order('id', { ascending: true })
-      .range(wpScanOffset, wpScanOffset + batchSize - 1);
-
-    if (error || !movies || movies.length === 0) {
-      console.log(`[WP-SCAN] ✅ Scan complete! Total streaming tags injected: ${totalInjected}`);
-      break;
-    }
-
-    // Filter to movies that: have tmdb_id, have studios, but DON'T already have a streaming tag
-    const candidates = movies.filter((m: any) => {
-      if (!m.tmdb_id) return false;
-      const studios = m.studios_json || [];
-      const hasMajor = studios.some((s: any) => MAJOR_STUDIO_IDS.has(s.id));
-      if (hasMajor) return false; // Major studio owns it — skip
-      const hasStreaming = studios.some((s: any) => STREAMING_STUDIO_IDS.has(s.id));
-      if (hasStreaming) return false; // Already has streaming tag — skip
-      return true;
-    });
-
-    if (candidates.length > 0) {
-      console.log(`[WP-SCAN] [Offset ${wpScanOffset}] Processing ${candidates.length}/${movies.length} candidates...`);
-
-      for (const movie of candidates) {
-        try {
-          const providers = await tmdb.getWatchProviders(movie.tmdb_id);
-          const providerIds = new Set(providers.map(p => p.id));
-          const studios = [...(movie.studios_json || [])];
-          const existingIds = new Set(studios.map((s: any) => s.id));
-          let injected = false;
-
-          for (const platform of STREAMING_PLATFORMS) {
-            if (providerIds.has(platform.providerId) && !existingIds.has(platform.studioId)) {
-              studios.push({
-                id: platform.studioId,
-                name: platform.name,
-                logo_path: platform.logo,
-                origin_country: platform.country,
-              });
-              existingIds.add(platform.studioId);
-              injected = true;
-            }
-          }
-
-          if (injected) {
-            await supabase.from('movies').update({ studios_json: studios }).eq('id', movie.id);
-            totalInjected++;
-          }
-        } catch {
-          // Skip individual failures
-        }
-      }
-    }
-
-    wpScanOffset += movies.length;
-    console.log(`[WP-SCAN] Progress: ${wpScanOffset} movies scanned, ${totalInjected} streaming tags injected.`);
-    await new Promise(r => setTimeout(r, 200));
-  }
-}
-
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 app.listen(port, () => {
@@ -288,15 +167,9 @@ app.listen(port, () => {
       categorizer
         .startContinuousEnrichment(200)
         .then(() => {
-          console.log('[BOOT] Enrichment pass finished. Starting watch provider scan...');
-          // Auto-start watch provider re-scan after enrichment completes
-          wpScanRunning = true;
-          runWatchProviderScan(50).finally(() => {
-            wpScanRunning = false;
-            console.log('[BOOT] Watch provider scan finished. Refreshing categories...');
-            generator.generateAndSyncCategories().catch((err) => {
-              console.error('[BOOT] Refresh categories failed:', err.message);
-            });
+          console.log('[BOOT] Enrichment pass finished. Refreshing home categories...');
+          generator.generateAndSyncCategories().catch((err) => {
+            console.error('[BOOT] Refresh categories failed:', err.message);
           });
         })
         .catch((e) => {
