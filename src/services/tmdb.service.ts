@@ -174,6 +174,25 @@ export class TmdbService {
     }
   }
 
+  /// Fetches real-time worldwide trending movies from TMDB API
+  async getTrendingMovies(timeWindow: 'day' | 'week' = 'day', pages: number = 3): Promise<number[]> {
+    const tmdbIds: number[] = [];
+    try {
+      for (let page = 1; page <= pages; page++) {
+        const res = await this.client.get(`/trending/movie/${timeWindow}`, {
+          params: { page },
+        });
+        const results = res.data?.results || [];
+        results.forEach((m: any) => {
+          if (m.id) tmdbIds.push(m.id);
+        });
+      }
+    } catch (e: any) {
+      console.error('[TMDB] getTrendingMovies error:', e.message);
+    }
+    return tmdbIds;
+  }
+
   /// Search for a movie by clean title and optional year
   async searchMovie(title: string, year?: string): Promise<TmdbMovieDetails | null> {
     try {

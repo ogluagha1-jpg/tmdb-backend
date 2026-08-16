@@ -389,29 +389,41 @@ export class CategoryGeneratorService {
   async generateAndSyncCategories(): Promise<{ totalCandidates: number; published: number }> {
     const supabase = SupabaseService.getClient();
     const minThreshold = env.MIN_MOVIES_PER_CATEGORY;
-    console.log(`[CATEGORY_GEN] Evaluating categories with minimum threshold >= ${minThreshold} movies...`);
+    console.log(`[CATEGORY_GEN] Evaluating categories with real-time TMDB trending data (threshold >= ${minThreshold} movies)...`);
+
+    // Fetch real-time worldwide trending IDs from TMDB API
+    const [dailyTrendingIds, weeklyTrendingIds] = await Promise.all([
+      this.tmdb.getTrendingMovies('day', 4),
+      this.tmdb.getTrendingMovies('week', 4),
+    ]);
 
     const candidates = this.getCandidateCategories();
-    const validCategoriesToPublish: any[] = [];
 
+    // Dynamically inject real-time trending movie IDs
+    if (dailyTrendingIds.length > 0) {
+      const top10Cat = candidates.find((c) => c.id === 'top10_today');
+      if (top10Cat) {
+        top10Cat.filter_query = `tmdb_id=in.(${dailyTrendingIds.join(',')})`;
+      }
+    }
+    if (weeklyTrendingIds.length > 0) {
+      const trendingCat = candidates.find((c) => c.id === 'trending_now');
+      if (trendingCat) {
+        trendingCat.filter_query = `tmdb_id=in.(${weeklyTrendingIds.join(',')})`;
+      }
+    }
+
+    const validCategoriesToPublish: any[] = [];
     let currentSortOrder = 1;
 
     for (const cat of candidates) {
-      let movieCount = await this.countMoviesForCategory(cat);
-      console.log(`[CATEGORY_GEN] Category "${cat.title}" -> ${movieCount} movies in database.`);
+      const movieCount = await this.countMoviesForCategory(cat);
+      console.log(`[CATEGORY_GEN] Category "${cat.title}" -> ${movieCount} matching movies in database.`);
 
       // Strict Threshold Gate: Ignore categories with 0 or very few movies
       if (movieCount < minThreshold) {
         console.log(`[CATEGORY_GEN] ✗ Skipping "${cat.title}" (Below threshold: ${movieCount} < ${minThreshold})`);
         continue;
-      }
-
-      // Display Cap for Top 10 and Trending shelves
-      let displayCount = movieCount;
-      if (cat.category_type === 'top10') {
-        displayCount = Math.min(10, movieCount);
-      } else if (cat.category_type === 'trending') {
-        displayCount = Math.min(50, movieCount);
       }
 
       validCategoriesToPublish.push({
@@ -422,7 +434,7 @@ export class CategoryGeneratorService {
         genre_id: cat.genre_id || null,
         order_by: cat.order_by || 'popularity.desc',
         filter_query: cat.filter_query || null,
-        movie_count: displayCount,
+        movie_count: movieCount,
         sort_order: currentSortOrder++,
         is_active: true,
         updated_at: new Date().toISOString(),
