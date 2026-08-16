@@ -195,17 +195,23 @@ export class CategorizerService {
       const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : (movie.year || cinemetaMeta?.year);
 
       // Multi-Source Streaming Originals Knowledge Graph (Wikipedia / Wikidata)
-      const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
-      const matchedOriginal = streamingSources.matchOriginal(movie.title, tmdbDetails?.title, year);
-      if (matchedOriginal) {
-        const alreadyPresent = studiosJson.some((s: any) => s.id === matchedOriginal.studioId);
-        if (!alreadyPresent) {
-          studiosJson.push({
-            id: matchedOriginal.studioId,
-            name: matchedOriginal.studioName,
-            logo_path: matchedOriginal.logoPath,
-            origin_country: 'US',
-          });
+      const hasMajorTheatricalStudio = studiosJson.some((s: any) =>
+        [127928, 25, 43, 174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559, 4, 24955, 2348, 8302, 333, 2, 6125, 5218, 420, 32353, 11106, 13252].includes(s.id)
+      );
+
+      if (!hasMajorTheatricalStudio) {
+        const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
+        const matchedOriginal = streamingSources.matchOriginal(movie.title, tmdbDetails?.title, year);
+        if (matchedOriginal) {
+          const alreadyPresent = studiosJson.some((s: any) => s.id === matchedOriginal.studioId);
+          if (!alreadyPresent) {
+            studiosJson.push({
+              id: matchedOriginal.studioId,
+              name: matchedOriginal.studioName,
+              logo_path: matchedOriginal.logoPath,
+              origin_country: 'US',
+            });
+          }
         }
       }
 

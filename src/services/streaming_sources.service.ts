@@ -185,13 +185,20 @@ export class StreamingSourcesService {
     const c1 = this.cleanTitle(title);
     const c2 = tmdbTitle ? this.cleanTitle(tmdbTitle) : '';
 
+    const isShortTitle = (c1.length <= 8 && !c1.includes(' ')) || (c2.length <= 8 && !c2.includes(' '));
     const testKeys: string[] = [];
-    if (numYear && numYear >= 2014) {
-      if (c1) {
-        testKeys.push(`${c1}_${numYear}`, `${c1}_${numYear - 1}`, `${c1}_${numYear + 1}`);
-      }
-      if (c2) {
-        testKeys.push(`${c2}_${numYear}`, `${c2}_${numYear - 1}`, `${c2}_${numYear + 1}`);
+    if (numYear && numYear >= 2015) {
+      if (isShortTitle) {
+        // Strict exact release year ONLY for short/single-word titles (eliminates collisions like Prey 2022 vs Prey 2021)
+        if (c1) testKeys.push(`${c1}_${numYear}`);
+        if (c2) testKeys.push(`${c2}_${numYear}`);
+      } else {
+        if (c1) {
+          testKeys.push(`${c1}_${numYear}`, `${c1}_${numYear - 1}`, `${c1}_${numYear + 1}`);
+        }
+        if (c2) {
+          testKeys.push(`${c2}_${numYear}`, `${c2}_${numYear - 1}`, `${c2}_${numYear + 1}`);
+        }
       }
     }
 
