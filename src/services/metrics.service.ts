@@ -143,7 +143,7 @@ export class MetricsService {
 
     // 3. Studio Live Counters (Exact official IDs only)
     const studioDefinitions = [
-      { id: 'netflix', name: 'Netflix Originals', nameAr: 'نتفليكس', query: 'or=(studios_json.cs.[{"id":178464}],studios_json.cs.[{"id":198834}],studios_json.cs.[{"id":185004}],studios_json.cs.[{"id":145174}],studios_json.cs.[{"id":171251}],studios_json.cs.[{"id":87858}],studios_json.cs.[{"id":192478}],studios_json.cs.[{"id":266997}],studios_json.cs.[{"id":98114}],studios_json.cs.[{"id":151528}])', color: '#E50914' },
+      { id: 'netflix', name: 'Netflix Originals', nameAr: 'نتفليكس', query: 'or=(studios_json.cs.[{"id":178464}],studios_json.cs.[{"id":185004}],studios_json.cs.[{"id":171251}],studios_json.cs.[{"id":145174}],studios_json.cs.[{"id":198834}],studios_json.cs.[{"id":192478}],studios_json.cs.[{"id":266997}],studios_json.cs.[{"id":87858}])', color: '#E50914' },
       { id: 'warner', name: 'Warner Bros. Pictures', nameAr: 'وارنر برذرز', query: 'or=(studios_json.cs.[{"id":174}],studios_json.cs.[{"id":429}],studios_json.cs.[{"id":9993}],studios_json.cs.[{"id":12}],studios_json.cs.[{"id":128064}])', color: '#005BBB' },
       { id: 'universal', name: 'Universal Pictures', nameAr: 'يونيفرسال', query: 'or=(studios_json.cs.[{"id":33}],studios_json.cs.[{"id":67}],studios_json.cs.[{"id":33413}],studios_json.cs.[{"id":10338}])', color: '#3B82F6' },
       { id: 'sony', name: 'Sony & Columbia', nameAr: 'سوني بيكتشرز', query: 'or=(studios_json.cs.[{"id":5}],studios_json.cs.[{"id":34}],studios_json.cs.[{"id":84}],studios_json.cs.[{"id":2251}],studios_json.cs.[{"id":559}])', color: '#002B66' },
