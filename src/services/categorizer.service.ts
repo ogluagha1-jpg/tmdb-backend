@@ -132,20 +132,26 @@ export class CategorizerService {
       // produced by partner studios, while avoiding false positives (e.g.
       // Spider-Man streams on Netflix but is a Sony/Marvel production).
       const MAJOR_STUDIO_IDS = new Set([
-        // Warner Bros
+        // Warner Bros & New Line
         174, 429, 9993, 12, 128064,
-        // Universal
-        33, 67, 33413, 10338,
-        // Sony / Columbia
+        // Universal & Focus Features
+        33, 67, 33413, 10338, 10146,
+        // Sony / Columbia / TriStar
         5, 34, 84, 2251, 559,
         // Paramount
         4, 24955, 2348, 8302, 333,
-        // Disney
-        2, 6125, 5218,
-        // 20th Century
-        127928, 25, 787, 9383,
+        // Disney & Pixar & Marvel
+        2, 6125, 5218, 3, 420, 32353, 11106, 13252,
+        // 20th Century & Searchlight
+        127928, 25, 787, 9383, 43,
         // Lionsgate
         1632, 35, 85885, 1634,
+        // DreamWorks
+        521, 7,
+        // MGM
+        21, 8411, 155700,
+        // Other Distinct Theatrical Studios
+        3172, 923, 41077, 10342, 14,
       ]);
 
       // Streaming platform definitions: TMDB Watch Provider ID → studio entry to inject

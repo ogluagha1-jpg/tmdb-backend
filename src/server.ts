@@ -171,8 +171,26 @@ async function runWatchProviderScan(batchSize: number) {
 
   // Major studio IDs — movies with these are NOT streaming originals
   const MAJOR_STUDIO_IDS = new Set([
-    174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559,
-    4, 24955, 2348, 8302, 333, 2, 6125, 5218, 127928, 25, 787, 9383, 1632, 35, 85885, 1634,
+    // Warner Bros & New Line
+    174, 429, 9993, 12, 128064,
+    // Universal & Focus Features
+    33, 67, 33413, 10338, 10146,
+    // Sony / Columbia / TriStar
+    5, 34, 84, 2251, 559,
+    // Paramount
+    4, 24955, 2348, 8302, 333,
+    // Disney & Pixar & Marvel
+    2, 6125, 5218, 3, 420, 32353, 11106, 13252,
+    // 20th Century & Searchlight
+    127928, 25, 787, 9383, 43,
+    // Lionsgate
+    1632, 35, 85885, 1634,
+    // DreamWorks
+    521, 7,
+    // MGM
+    21, 8411, 155700,
+    // Other Distinct Theatrical Studios
+    3172, 923, 41077, 10342, 14,
   ]);
   const STREAMING_PLATFORMS = [
     { providerId: 8, studioId: 178464, name: 'Netflix', logo: '/pbpMk2JmcoNnQwB5JGpXAbmLui6.png', country: 'US' },
