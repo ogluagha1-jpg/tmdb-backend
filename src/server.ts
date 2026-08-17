@@ -351,14 +351,19 @@ app.post('/api/ai/categories/discover', async (_req: Request, res: Response) => 
 app.get('/api/ai/enriched-movies', async (req: Request, res: Response) => {
   try {
     const supabase = SupabaseService.getClient();
-    const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 24, 100);
     const offset = parseInt(req.query.offset as string, 10) || 0;
     const engine = (req.query.engine as string || 'all').toLowerCase();
     const search = (req.query.search as string || '').trim();
 
+    // Existing core columns
+    const baseSelect = 'id, title, tmdb_id, poster_path, year, release_date, popularity, title_ar, overview_ar, tagline_ar, studios_json, keywords_json, enriched_at';
+
+    // Attempt with ai_model
+    let selectFields = baseSelect + ', ai_model';
     let query = supabase
       .from('movies')
-      .select('id, title, tmdb_id, poster_path, year, release_date, popularity, title_ar, overview_ar, tagline_ar, studios_json, keywords_json, ai_model, enriched_at, updated_at', { count: 'exact' })
+      .select(selectFields, { count: 'exact' })
       .not('title_ar', 'is', null)
       .not('overview_ar', 'is', null)
       .order('enriched_at', { ascending: false, nullsFirst: false });
@@ -373,7 +378,27 @@ app.get('/api/ai/enriched-movies', async (req: Request, res: Response) => {
       query = query.or(`title.ilike.%${search}%,title_ar.ilike.%${search}%`);
     }
 
-    const { data: movies, count, error } = await query.range(offset, offset + limit - 1);
+    let { data: movies, count, error } = await query.range(offset, offset + limit - 1);
+
+    // If ai_model column is not yet migrated in Supabase table, query base columns safely
+    if (error && /ai_model/i.test(error.message)) {
+      let fallbackQuery = supabase
+        .from('movies')
+        .select(baseSelect, { count: 'exact' })
+        .not('title_ar', 'is', null)
+        .not('overview_ar', 'is', null)
+        .order('enriched_at', { ascending: false, nullsFirst: false });
+
+      if (search) {
+        fallbackQuery = fallbackQuery.or(`title.ilike.%${search}%,title_ar.ilike.%${search}%`);
+      }
+
+      const retryRes = await fallbackQuery.range(offset, offset + limit - 1);
+      movies = retryRes.data;
+      count = retryRes.count;
+      error = retryRes.error;
+    }
+
     if (error) throw error;
 
     res.status(200).json({
