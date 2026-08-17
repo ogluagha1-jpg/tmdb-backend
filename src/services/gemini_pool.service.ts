@@ -84,7 +84,7 @@ export class GeminiPoolService {
   private totalAiErrors = 0;
 
   // Selected stable model (supports override via GEMINI_MODEL)
-  private model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  private model = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 
   private constructor() {
     this.initializePool();

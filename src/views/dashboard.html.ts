@@ -1277,7 +1277,7 @@ export function renderDashboardHtml(): string {
     };
 
     window.triggerAiTest = async function() {
-      window.showToast('🤖 Testing Gemini AI Pool (Model: gemini-2.5-flash)...');
+      window.showToast('🤖 Testing Gemini AI Pool (Model: gemini-3.1-flash-lite)...');
       try {
         const res = await fetch('/api/ai/test', {
           method: 'POST',
