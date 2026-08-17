@@ -429,7 +429,9 @@ export class GeminiPoolService {
       if (this.groqKeyPool.length > 0) {
         const groqRes = await this.callGroqOpenSource<T>(prompt);
         if (groqRes) return groqRes;
-        console.warn('[AI_GATEWAY] ⚠️ Groq Primary returned null. Falling back to Gemini secondary pool...');
+        if (this.keyPool.length > 0) {
+          console.warn('[AI_GATEWAY] ⚠️ Groq Primary returned null. Falling back to Gemini secondary pool...');
+        }
       }
       // Fallback to Gemini
       if (this.keyPool.length > 0) {
@@ -440,9 +442,11 @@ export class GeminiPoolService {
       if (this.keyPool.length > 0) {
         const geminiRes = await this.callGeminiPool<T>(prompt, retries);
         if (geminiRes) return geminiRes;
-        console.warn('[AI_GATEWAY] ⚠️ Gemini Primary returned null or in cooldown. Falling back to Groq Llama 3.3 70B...');
+        if (this.groqKeyPool.length > 0) {
+          console.warn('[AI_GATEWAY] ⚠️ Gemini Primary returned null or in cooldown. Falling back to Groq Llama 3.3 70B...');
+        }
       }
-      // Fallback to Groq
+      // Fallback to Groq ONLY if Groq keys are configured
       if (this.groqKeyPool.length > 0) {
         return this.callGroqOpenSource<T>(prompt);
       }
@@ -748,10 +752,7 @@ Respond ONLY in valid JSON conforming to this schema:
         });
 
         if (!aiResult) {
-          this.cooperativeScanStats.failed++;
-          this.cooperativeScanStats.processed++;
-
-          // Check if all keys became invalid/revoked
+          // Check if all usable keys are invalid/revoked
           const usableGemini = Array.from(this.keyStats.values()).filter((s) => s.status !== 'invalid');
           const usableGroq = Array.from(this.groqStats.values()).filter((s) => s.status !== 'invalid');
           if (usableGemini.length === 0 && usableGroq.length === 0) {
@@ -761,6 +762,29 @@ Respond ONLY in valid JSON conforming to this schema:
             break;
           }
 
+          // If keys are valid but currently cooling down, pause gracefully instead of thrashing 1,000 movies in milliseconds!
+          const now = Date.now();
+          const geminiWaitTimes = usableGemini.filter((s) => s.cooldownUntil && s.cooldownUntil > now).map((s) => s.cooldownUntil! - now);
+          const groqWaitTimes = usableGroq.filter((s) => s.cooldownUntil && s.cooldownUntil > now).map((s) => s.cooldownUntil! - now);
+
+          const allGeminiCooling = usableGemini.length > 0 && geminiWaitTimes.length === usableGemini.length;
+          const allGroqCooling = usableGroq.length === 0 || groqWaitTimes.length === usableGroq.length;
+
+          if (allGeminiCooling && allGroqCooling) {
+            const allDelays = [...geminiWaitTimes, ...groqWaitTimes].filter((d) => d > 0);
+            const minWaitMs = Math.min(...(allDelays.length > 0 ? allDelays : [15000]));
+            const waitMs = Math.min(Math.max(minWaitMs, 5000), 45000);
+
+            console.warn(`[GEMINI_GAP_SCAN] ⏳ All AI keys currently in rate-limit cooldown. Sleeping ${Math.round(waitMs / 1000)}s before retry...`);
+            this.cooperativeScanStats.currentTitle = `Rate-limit cooldown (${Math.round(waitMs / 1000)}s)...`;
+            await new Promise((r) => setTimeout(r, waitMs));
+            i--; // Retry the same movie!
+            continue;
+          }
+
+          this.cooperativeScanStats.failed++;
+          this.cooperativeScanStats.processed++;
+          await new Promise((r) => setTimeout(r, 1000));
           continue;
         }
 
