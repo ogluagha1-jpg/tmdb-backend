@@ -9,16 +9,16 @@ export function setupCronJobs(): void {
 
   console.log('[CRON] Initializing automated background schedulers...');
 
-  // 1. Movie Enrichment Sync (Runs on MOVIES_SYNC_CRON_SCHEDULE, e.g. every 2 hours)
+  // 1. Multi-Source Streaming & Cooperative Audit Sync
   cron.schedule(env.MOVIES_SYNC_CRON_SCHEDULE, async () => {
-    console.log('[CRON] Executing scheduled movie categorization sync...');
+    console.log('[CRON] Executing scheduled streaming originals & cooperative audit...');
     try {
-      await categorizer.syncUncategorizedMovies(100);
+      await categorizer.syncUncategorizedMovies(200);
     } catch (e: any) {
-      console.error('[CRON] Error during movie categorization sync:', e.message);
+      console.error('[CRON] Error during cooperative sync:', e.message);
     }
   });
-  console.log(`[CRON] Scheduled movie enrichment: ${env.MOVIES_SYNC_CRON_SCHEDULE}`);
+  console.log(`[CRON] Scheduled streaming & cooperative audit: ${env.MOVIES_SYNC_CRON_SCHEDULE}`);
 
   // 2. Home Categories Regeneration (Runs on CATEGORIES_CRON_SCHEDULE, e.g. every 6 hours)
   cron.schedule(env.CATEGORIES_CRON_SCHEDULE, async () => {

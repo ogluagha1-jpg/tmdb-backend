@@ -17,6 +17,12 @@ export interface AutoScannerStatus {
   lastActiveAt: string | null;
 }
 
+/**
+ * AutoScannerService:
+ * Cooperative Background Watcher & Health Monitor.
+ * Monitors database saturation, coordinates with local Python ingestion,
+ * and maintains fresh Home Categories without redundant TMDB scraping.
+ */
 export class AutoScannerService {
   private static instance: AutoScannerService;
   private categorizer: CategorizerService;
@@ -43,7 +49,7 @@ export class AutoScannerService {
     return AutoScannerService.instance;
   }
 
-  /// Start or resume 24/7 continuous background scanning
+  /// Start or resume cooperative background watcher
   public start(): void {
     if (this.isRunning && !this.isPaused) return;
 
@@ -52,35 +58,23 @@ export class AutoScannerService {
     if (!this.startedAt) this.startedAt = new Date().toISOString();
     this.lastActiveAt = new Date().toISOString();
 
-    console.log('[AUTO-SCANNER] 🟢 Continuous 24/7 background auto-scanner started!');
+    console.log('[AUTO-SCANNER] 🚀 Cooperative background watcher online.');
     this.runContinuousLoop().catch((err) => {
       console.error('[AUTO-SCANNER] Fatal loop error:', err.message);
       this.isRunning = false;
     });
   }
 
-  /// Pause scanning
+  /// Pause watcher
   public pause(): void {
     this.isPaused = true;
-    console.log('[AUTO-SCANNER] ⏸️ Auto-scanner paused by admin.');
+    console.log('[AUTO-SCANNER] ⏸️ Cooperative watcher paused.');
   }
 
-  /// Reset all movie enrichment timestamps and start full rescan from scratch
+  /// Trigger full streaming originals sync and category regeneration
   public async resetAndRescanAll(): Promise<{ resetCount: number }> {
-    const supabase = SupabaseService.getClient();
-    console.log('[AUTO-SCANNER] 🔄 Initiating full database rescan from scratch...');
+    console.log('[AUTO-SCANNER] 🔄 Initiating full category & streaming sync...');
 
-    // Reset enriched_at across all records in Supabase
-    const { count, error } = await supabase
-      .from('movies')
-      .update({ enriched_at: null }, { count: 'exact' })
-      .not('id', 'is', null);
-
-    if (error) {
-      console.error('[AUTO-SCANNER] Error resetting enriched_at:', error.message);
-    }
-
-    // Reset runtime counters
     this.totalProcessedThisSession = 0;
     this.currentBatchOffset = 0;
     this.lastError = null;
@@ -88,44 +82,23 @@ export class AutoScannerService {
     this.lastActiveAt = new Date().toISOString();
     this.isPaused = false;
 
-    // Start fresh continuous loop
-    this.start();
+    // Run streaming sync and category refresh
+    const res = await this.categorizer.syncUncategorizedMovies(200);
 
-    return { resetCount: count || 10244 };
+    return { resetCount: res.processed };
   }
 
-  /// Trigger a single discrete batch scan
+  /// Trigger a single discrete batch scan / audit
   public async scanBatch(batchSize: number = 200): Promise<{ processed: number; updated: number }> {
-    const supabase = SupabaseService.getClient();
-    const { data: movies, error } = await supabase
-      .from('movies')
-      .select('id, title, tmdb_title, year, release_date, tmdb_id, imdb_id, title_ar, overview_ar, tagline_ar, enriched_at, studios_json')
-      .is('enriched_at', null)
-      .order('popularity', { ascending: false, nullsFirst: false })
-      .limit(batchSize);
-
-    if (error || !movies || movies.length === 0) {
-      return { processed: 0, updated: 0 };
-    }
-
-    let updated = 0;
-    for (const m of movies) {
-      this.lastScannedTitle = m.title;
-      this.lastActiveAt = new Date().toISOString();
-      const ok = await (this.categorizer as any).enrichMovie(m, supabase);
-      if (ok) updated++;
-      this.totalProcessedThisSession++;
-    }
-
-    // Refresh categories after batch
-    await this.generator.generateAndSyncCategories().catch(() => {});
-
-    return { processed: movies.length, updated };
+    this.lastActiveAt = new Date().toISOString();
+    const res = await this.categorizer.syncUncategorizedMovies(batchSize);
+    this.totalProcessedThisSession += res.processed;
+    return { processed: res.processed, updated: res.updated };
   }
 
-  /// Continuous autonomous loop
+  /// Continuous cooperative loop
   private async runContinuousLoop(): Promise<void> {
-    const supabase = SupabaseService.getClient();
+    let lastEnrichedCount = -1;
 
     while (this.isRunning) {
       if (this.isPaused) {
@@ -134,67 +107,39 @@ export class AutoScannerService {
       }
 
       try {
-        // Query next batch of unenriched titles (sorted by popularity for maximum user impact first)
-        const { data: movies, error } = await supabase
+        const supabase = SupabaseService.getClient();
+
+        // Check current database saturation
+        const { count: enrichedCount, error } = await supabase
           .from('movies')
-          .select('id, title, tmdb_title, year, release_date, tmdb_id, imdb_id, title_ar, overview_ar, tagline_ar, enriched_at, studios_json')
-          .is('enriched_at', null)
-          .order('popularity', { ascending: false, nullsFirst: false })
-          .limit(30);
+          .select('id', { count: 'exact', head: true })
+          .not('enriched_at', 'is', null);
 
         if (error) {
           this.lastError = error.message;
-          console.error('[AUTO-SCANNER] Supabase query error:', error.message);
-          await this.delay(5000);
+          await this.delay(10000);
           continue;
         }
 
-        // If no unenriched movies remain, sleep and re-check for new imports
-        if (!movies || movies.length === 0) {
-          console.log('[AUTO-SCANNER] 🎉 All movies fully saturated! Sleeping for 60s before next check...');
-          await this.delay(60000);
-          continue;
+        const currentEnriched = enrichedCount || 0;
+        this.lastActiveAt = new Date().toISOString();
+
+        // If new movies were enriched by the Python engine, update home categories!
+        if (lastEnrichedCount !== -1 && currentEnriched !== lastEnrichedCount) {
+          console.log(`[AUTO-SCANNER] 📡 Detected database update (${currentEnriched} enriched movies, diff: +${currentEnriched - lastEnrichedCount}). Refreshing home categories...`);
+          await this.generator.generateAndSyncCategories().catch((e) => {
+            console.error('[AUTO-SCANNER] Category refresh error:', e.message);
+          });
         }
 
-        // Process batch with concurrency = 6
-        const concurrency = 6;
-        for (let i = 0; i < movies.length; i += concurrency) {
-          if (this.isPaused || !this.isRunning) break;
+        lastEnrichedCount = currentEnriched;
 
-          const slice = movies.slice(i, i + concurrency);
-          await Promise.all(
-            slice.map(async (m) => {
-              this.lastScannedTitle = m.title;
-              this.lastActiveAt = new Date().toISOString();
-              const timeoutPromise = new Promise<boolean>((resolve) =>
-                setTimeout(() => resolve(false), 8000)
-              );
-              try {
-                await Promise.race([
-                  (this.categorizer as any).enrichMovie(m, supabase),
-                  timeoutPromise,
-                ]);
-              } catch (e: any) {
-                this.lastError = e.message;
-              }
-              this.totalProcessedThisSession++;
-            })
-          );
-
-          await this.delay(200); // Polite pacing
-        }
-
-        this.currentBatchOffset += movies.length;
-
-        // Periodically refresh home categories every 150 processed movies
-        if (this.totalProcessedThisSession % 150 < 30) {
-          console.log(`[AUTO-SCANNER] ✨ Processed ${this.totalProcessedThisSession} movies. Refreshing home categories...`);
-          await this.generator.generateAndSyncCategories().catch(() => {});
-        }
+        // Polite polling interval (every 60 seconds)
+        await this.delay(60000);
       } catch (err: any) {
         this.lastError = err.message;
-        console.error('[AUTO-SCANNER] Batch cycle error:', err.message);
-        await this.delay(5000);
+        console.error('[AUTO-SCANNER] Watcher cycle error:', err.message);
+        await this.delay(10000);
       }
     }
   }
@@ -208,7 +153,7 @@ export class AutoScannerService {
       supabase.from('movies').select('id', { count: 'exact', head: true }).not('enriched_at', 'is', null),
     ]);
 
-    const totalMovies = totalRes.count || 10244;
+    const totalMovies = totalRes.count || 0;
     const enrichedMovies = enrichedRes.count || 0;
     const unenrichedRemaining = Math.max(0, totalMovies - enrichedMovies);
     const completionPct = totalMovies > 0 ? Math.round((enrichedMovies / totalMovies) * 1000) / 10 : 0;
