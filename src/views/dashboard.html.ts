@@ -741,26 +741,53 @@ export function renderDashboardHtml(): string {
       </div>
     </div>
 
-    <!-- 🤖 GEMINI AI MULTI-KEY POOL CARD 🤖 -->
+    <!-- 🤖 GEMINI COOPERATIVE AI & GAP-SCANNER CONTROL HUB 🤖 -->
     <div class="card" style="margin-bottom: 20px; border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.08));">
       <div class="card-title-row" style="flex-wrap: wrap; gap: 10px;">
         <div style="display: flex; align-items: center; gap: 10px;">
           <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🤖</div>
           <div>
             <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-              Gemini AI Multi-Key Pool & Neural Localization
+              Gemini AI Cooperative Intelligence Hub
+              <span id="ai-runtime-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(245, 158, 11, 0.15); color: #F59E0B; border-color: rgba(245, 158, 11, 0.3);">
+                ⏸️ Runtime AI: Controlled
+              </span>
               <span id="ai-pool-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
                 16 Keys Active
               </span>
             </h2>
-            <p class="card-desc">Auto-rotates across healthy keys with 429 automatic failover for Arabic localization, authentic studios & micro-genres</p>
+            <p class="card-desc">Cooperatively queries the entire database to find titles missing Arabic localization or Studio tags and fills gaps via 16-key AI pool</p>
           </div>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-primary" onclick="window.triggerAiTest()" style="background: linear-gradient(135deg, #6366F1, #4F46E5); font-weight: 700;">⚡ Test AI Pool</button>
+          <button id="btn-toggle-ai" class="btn" onclick="window.toggleAiRuntime()" style="background: rgba(255, 255, 255, 0.08); font-size: 12px; font-weight: 600;">
+            🎛️ Toggle Runtime AI
+          </button>
+          <button id="btn-gap-scan" class="btn btn-primary" onclick="window.triggerCooperativeGapScan()" style="background: linear-gradient(135deg, #6366F1, #4F46E5); font-weight: 700;">
+            🚀 Launch Cooperative AI Gap-Scan
+          </button>
+          <button class="btn" onclick="window.triggerAiTest()" style="background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); font-weight: 600;">
+            ⚡ Test Key
+          </button>
         </div>
       </div>
 
+      <!-- Live Cooperative AI Gap-Scan Progress Box -->
+      <div id="ai-gap-progress-box" style="margin-top: 14px; padding: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(99, 102, 241, 0.25);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px;">
+          <span style="font-weight: 700; color: #818CF8;">🎯 Cooperative AI Gap-Scanner Progress:</span>
+          <span id="ai-gap-progress-label" style="font-weight: 700; color: white;">0 / 0 (0%)</span>
+        </div>
+        <div class="progress-track" style="height: 8px; border-radius: 4px; background: rgba(255,255,255,0.06);">
+          <div id="ai-gap-progress-fill" class="progress-fill" style="width: 0%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #6366F1, #818CF8, #10B981); transition: width 0.3s ease;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+          <span>Processing: <strong id="ai-gap-current-title" style="color: white;">Idle (Ready on demand)</strong></span>
+          <span>Enriched: <strong id="ai-gap-enriched-count" style="color: #10B981;">0</strong> | Failed: <strong id="ai-gap-failed-count" style="color: #EF4444;">0</strong></span>
+        </div>
+      </div>
+
+      <!-- 16 Key Grid -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 14px;" id="ai-keys-container">
         <!-- Injected via JavaScript -->
       </div>
@@ -1024,11 +1051,54 @@ export function renderDashboardHtml(): string {
           });
         }
 
-        // 6. Gemini AI Pool
+        // 6. Gemini Cooperative AI & Gap-Scanner
         const aiContainer = document.getElementById('ai-keys-container');
         const aiPool = d.aiPool;
         if (aiPool) {
+          const isAiOn = !!aiPool.isAiEnabled;
+          const runtimeBadge = document.getElementById('ai-runtime-badge');
+          const toggleAiBtn = document.getElementById('btn-toggle-ai');
+          if (runtimeBadge) {
+            if (isAiOn) {
+              runtimeBadge.innerText = '🟢 Runtime AI: Enabled';
+              runtimeBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+              runtimeBadge.style.color = '#10B981';
+              runtimeBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            } else {
+              runtimeBadge.innerText = '⏸️ Runtime AI: Controlled';
+              runtimeBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+              runtimeBadge.style.color = '#F59E0B';
+              runtimeBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+            }
+          }
+          if (toggleAiBtn) {
+            toggleAiBtn.innerText = isAiOn ? '🛑 Disable Runtime AI' : '🎛️ Enable Runtime AI';
+          }
+
           safeSetText('ai-pool-badge', aiPool.healthyKeys + ' / ' + aiPool.totalKeys + ' Healthy (' + aiPool.model + ')');
+
+          // Gap Scan Status
+          const gap = aiPool.cooperativeScan || {};
+          const gapBtn = document.getElementById('btn-gap-scan');
+          if (gapBtn) {
+            if (gap.isRunning && !gap.isPaused) {
+              gapBtn.innerText = '⏸️ Pause AI Gap-Scan';
+              gapBtn.style.background = 'linear-gradient(135deg, #F59E0B, #D97706)';
+            } else if (gap.isRunning && gap.isPaused) {
+              gapBtn.innerText = '▶️ Resume AI Gap-Scan';
+              gapBtn.style.background = 'linear-gradient(135deg, #10B981, #059669)';
+            } else {
+              gapBtn.innerText = '🚀 Launch Cooperative AI Gap-Scan';
+              gapBtn.style.background = 'linear-gradient(135deg, #6366F1, #4F46E5)';
+            }
+          }
+
+          safeSetText('ai-gap-progress-label', (gap.processed || 0).toLocaleString() + ' / ' + (gap.totalGaps || 0).toLocaleString() + ' (' + (gap.completionPct || 0) + '%)');
+          safeSetWidth('ai-gap-progress-fill', gap.completionPct || 0);
+          safeSetText('ai-gap-current-title', gap.currentTitle || 'Idle (Ready on demand)');
+          safeSetText('ai-gap-enriched-count', (gap.enriched || 0).toLocaleString());
+          safeSetText('ai-gap-failed-count', (gap.failed || 0).toLocaleString());
+
           if (aiContainer && Array.isArray(aiPool.keys)) {
             aiContainer.innerHTML = '';
             aiPool.keys.forEach(k => {
@@ -1218,6 +1288,38 @@ export function renderDashboardHtml(): string {
       }
     };
 
+    window.toggleAiRuntime = async function() {
+      try {
+        const res = await fetch('/api/ai/toggle', { method: 'POST' });
+        const result = await res.json();
+        window.showToast(result.message || 'Runtime AI status updated');
+        setTimeout(window.fetchMetrics, 300);
+      } catch (err) {
+        window.showToast('❌ Toggle error: ' + err.message);
+      }
+    };
+
+    window.triggerCooperativeGapScan = async function() {
+      try {
+        const res = await fetch('/api/ai/gap-scan/status');
+        const data = await res.json();
+        if (data.status && data.status.isRunning && !data.status.isPaused) {
+          await fetch('/api/ai/gap-scan/pause', { method: 'POST' });
+          window.showToast('⏸️ Cooperative AI Gap-Scan Paused.');
+        } else if (data.status && data.status.isRunning && data.status.isPaused) {
+          await fetch('/api/ai/gap-scan/start', { method: 'POST' });
+          window.showToast('▶️ Cooperative AI Gap-Scan Resumed!');
+        } else {
+          window.showToast('🚀 Launching Cooperative AI Gap-Scan across database...');
+          await fetch('/api/ai/gap-scan/start', { method: 'POST' });
+          window.showToast('✨ Cooperative AI Gap-Scan actively filling missed fields!');
+        }
+        setTimeout(window.fetchMetrics, 500);
+      } catch (err) {
+        window.showToast('❌ Gap Scan error: ' + err.message);
+      }
+    };
+
     // Global aliases
     window.fetchMetrics = window.fetchMetrics;
     window.fetchScannerStatus = window.fetchScannerStatus;
@@ -1228,6 +1330,8 @@ export function renderDashboardHtml(): string {
     window.triggerResetAndRescan = window.triggerResetAndRescan;
     window.triggerRegenerateCategories = window.triggerRegenerateCategories;
     window.triggerAiTest = window.triggerAiTest;
+    window.toggleAiRuntime = window.toggleAiRuntime;
+    window.triggerCooperativeGapScan = window.triggerCooperativeGapScan;
     window.openCreateModal = window.openCreateModal;
     window.closeCreateModal = window.closeCreateModal;
 
@@ -1241,6 +1345,8 @@ export function renderDashboardHtml(): string {
     var triggerResetAndRescan = window.triggerResetAndRescan;
     var triggerRegenerateCategories = window.triggerRegenerateCategories;
     var triggerAiTest = window.triggerAiTest;
+    var toggleAiRuntime = window.toggleAiRuntime;
+    var triggerCooperativeGapScan = window.triggerCooperativeGapScan;
     var openCreateModal = window.openCreateModal;
     var closeCreateModal = window.closeCreateModal;
     var applyPreset = window.applyPreset;

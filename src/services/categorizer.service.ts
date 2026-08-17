@@ -241,12 +241,16 @@ export class CategorizerService {
       }
 
       // ── TIER 4: GEMINI AI MULTI-KEY ENRICHMENT BOOSTER (ARABIC & STUDIO ATTRIBUTION) ──
+      const { GeminiPoolService } = await import('./gemini_pool.service');
+      const geminiPool = GeminiPoolService.getInstance();
+
       const needsArabic = !movie.title_ar && !arMeta.titleAr;
       const needsStudio = studiosJson.length === 0;
-      if (needsArabic || needsStudio) {
+
+      // Only run during regular scanning if explicitly enabled by admin toggle
+      if (geminiPool.isAiEnabled() && (needsArabic || needsStudio)) {
         try {
-          const { GeminiPoolService } = await import('./gemini_pool.service');
-          const aiResult = await GeminiPoolService.getInstance().enrichMovieWithAi({
+          const aiResult = await geminiPool.enrichMovieWithAi({
             title: tmdbDetails?.title || movie.title,
             cleanTitle: this.cleanTitle(movie.title),
             year: year,

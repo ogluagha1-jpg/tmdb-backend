@@ -262,6 +262,67 @@ app.get('/api/ai/pool', async (_req: Request, res: Response) => {
   }
 });
 
+// 17. Toggle AI Enrichment in Standard Runtime Auto-Scanner (Enable / Disable)
+app.post('/api/ai/toggle', async (req: Request, res: Response) => {
+  try {
+    const enable = req.body?.enable !== undefined ? !!req.body.enable : undefined;
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const isEnabled = GeminiPoolService.getInstance().toggleAiEnrichment(enable);
+    res.status(200).json({
+      success: true,
+      isEnabled,
+      message: `Gemini AI runtime enrichment is now ${isEnabled ? 'ENABLED' : 'DISABLED'}.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 18. Start Cooperative AI Gap-Scan (Targeting missed titles across database)
+app.post('/api/ai/gap-scan/start', async (req: Request, res: Response) => {
+  try {
+    const maxTitles = parseInt(req.body?.maxTitles || (req.query?.maxTitles as string), 10) || 5000;
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const result = await GeminiPoolService.getInstance().startCooperativeGapScan({ maxTitles });
+    res.status(200).json({ success: true, result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 19. Pause Cooperative AI Gap-Scan
+app.post('/api/ai/gap-scan/pause', async (_req: Request, res: Response) => {
+  try {
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const result = GeminiPoolService.getInstance().pauseCooperativeGapScan();
+    res.status(200).json({ success: true, result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 20. Stop Cooperative AI Gap-Scan
+app.post('/api/ai/gap-scan/stop', async (_req: Request, res: Response) => {
+  try {
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const result = GeminiPoolService.getInstance().stopCooperativeGapScan();
+    res.status(200).json({ success: true, result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 21. Get Cooperative AI Gap-Scan Status
+app.get('/api/ai/gap-scan/status', async (_req: Request, res: Response) => {
+  try {
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const pool = GeminiPoolService.getInstance().getPoolMetrics();
+    res.status(200).json({ success: true, status: pool.cooperativeScan, isAiEnabled: pool.isAiEnabled });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 const server = app.listen(port, () => {

@@ -24,6 +24,23 @@ export interface AiEnrichmentResult {
 export class GeminiPoolService {
   private static instance: GeminiPoolService;
 
+  // AI execution is OFF by default during standard runtime scanning
+  // Controlled explicitly via Dashboard admin toggle or Cooperative Gap-Scan
+  private isAiEnrichmentEnabled = false;
+
+  // Cooperative AI Gap-Scanner state
+  private isCooperativeScanning = false;
+  private isCooperativeScanPaused = false;
+  private cooperativeScanStats = {
+    totalGaps: 0,
+    processed: 0,
+    enriched: 0,
+    failed: 0,
+    currentTitle: '',
+    startedAt: null as string | null,
+    lastActiveAt: null as string | null,
+  };
+
   // 16-Key High-Capacity Pool
   private defaultKeyPool: string[] = [
     'AIzaSyB4dZhhGMDCbA-v71flTpIq0ooqCdothHE',
@@ -70,6 +87,20 @@ export class GeminiPoolService {
       GeminiPoolService.instance = new GeminiPoolService();
     }
     return GeminiPoolService.instance;
+  }
+
+  public isAiEnabled(): boolean {
+    return this.isAiEnrichmentEnabled;
+  }
+
+  public toggleAiEnrichment(enable?: boolean): boolean {
+    if (enable !== undefined) {
+      this.isAiEnrichmentEnabled = enable;
+    } else {
+      this.isAiEnrichmentEnabled = !this.isAiEnrichmentEnabled;
+    }
+    console.log(`[GEMINI_POOL] 🎛️ AI Enrichment in Runtime Scanner set to: ${this.isAiEnrichmentEnabled ? 'ENABLED' : 'DISABLED'}`);
+    return this.isAiEnrichmentEnabled;
   }
 
   private initializePool(): void {
@@ -266,6 +297,17 @@ Respond ONLY in valid JSON conforming to this schema:
     totalSuccess: number;
     totalErrors: number;
     model: string;
+    isAiEnabled: boolean;
+    cooperativeScan: {
+      isRunning: boolean;
+      isPaused: boolean;
+      totalGaps: number;
+      processed: number;
+      enriched: number;
+      failed: number;
+      currentTitle: string;
+      completionPct: number;
+    };
     keys: GeminiKeyHealth[];
   } {
     const now = Date.now();
@@ -302,6 +344,10 @@ Respond ONLY in valid JSON conforming to this schema:
       });
     });
 
+    const completionPct = this.cooperativeScanStats.totalGaps > 0
+      ? parseFloat(((this.cooperativeScanStats.processed / this.cooperativeScanStats.totalGaps) * 100).toFixed(1))
+      : 0;
+
     return {
       totalKeys: this.keyPool.length,
       healthyKeys: healthy,
@@ -311,7 +357,198 @@ Respond ONLY in valid JSON conforming to this schema:
       totalSuccess: this.totalAiSuccess,
       totalErrors: this.totalAiErrors,
       model: this.model,
+      isAiEnabled: this.isAiEnrichmentEnabled,
+      cooperativeScan: {
+        isRunning: this.isCooperativeScanning,
+        isPaused: this.isCooperativeScanPaused,
+        totalGaps: this.cooperativeScanStats.totalGaps,
+        processed: this.cooperativeScanStats.processed,
+        enriched: this.cooperativeScanStats.enriched,
+        failed: this.cooperativeScanStats.failed,
+        currentTitle: this.cooperativeScanStats.currentTitle,
+        completionPct,
+      },
       keys,
     };
+  }
+
+  /// ── COOPERATIVE AI GAP-SCANNER ──
+  /// Finds movies that missed enrichment during traditional scanning and fills the missing fields via AI
+  public async startCooperativeGapScan(options?: { maxTitles?: number }): Promise<{
+    started: boolean;
+    message: string;
+    totalGaps?: number;
+  }> {
+    if (this.isCooperativeScanning && !this.isCooperativeScanPaused) {
+      return { started: false, message: 'Cooperative AI Gap-Scan is already running.' };
+    }
+
+    if (this.isCooperativeScanning && this.isCooperativeScanPaused) {
+      this.isCooperativeScanPaused = false;
+      return { started: true, message: 'Cooperative AI Gap-Scan resumed.' };
+    }
+
+    this.isCooperativeScanning = true;
+    this.isCooperativeScanPaused = false;
+    this.cooperativeScanStats = {
+      totalGaps: 0,
+      processed: 0,
+      enriched: 0,
+      failed: 0,
+      currentTitle: 'Querying database for missing fields...',
+      startedAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+    };
+
+    // Run asynchronously in background
+    this.runCooperativeGapScanLoop(options?.maxTitles || 5000).catch((err) => {
+      console.error('[GEMINI_GAP_SCAN] Critical error in gap scan loop:', err);
+      this.isCooperativeScanning = false;
+    });
+
+    return {
+      started: true,
+      message: 'Cooperative AI Gap-Scan launched across database missing records.',
+    };
+  }
+
+  public pauseCooperativeGapScan(): { message: string } {
+    if (!this.isCooperativeScanning) {
+      return { message: 'Cooperative AI Gap-Scan is not running.' };
+    }
+    this.isCooperativeScanPaused = true;
+    console.log('[GEMINI_GAP_SCAN] ⏸️ Cooperative AI Gap-Scan paused.');
+    return { message: 'Cooperative AI Gap-Scan paused.' };
+  }
+
+  public stopCooperativeGapScan(): { message: string } {
+    this.isCooperativeScanning = false;
+    this.isCooperativeScanPaused = false;
+    this.cooperativeScanStats.currentTitle = 'Stopped';
+    console.log('[GEMINI_GAP_SCAN] ⏹️ Cooperative AI Gap-Scan stopped.');
+    return { message: 'Cooperative AI Gap-Scan stopped.' };
+  }
+
+  private async runCooperativeGapScanLoop(maxTitles: number): Promise<void> {
+    const { SupabaseService } = await import('./supabase.service');
+    const supabase = SupabaseService.getClient();
+
+    console.log('[GEMINI_GAP_SCAN] 🔍 Fetching movies with missing Arabic or Studio fields...');
+
+    // Fetch movies missing title_ar, overview_ar, or studios_json
+    const { data: gapMovies, error } = await supabase
+      .from('movies')
+      .select('id, title, tmdb_id, year, release_date, overview, genres_json, keywords_json, studios_json, title_ar, overview_ar, tagline_ar')
+      .or('title_ar.is.null,overview_ar.is.null,studios_json.is.null,studios_json.eq.[]')
+      .order('popularity', { ascending: false, nullsFirst: false })
+      .limit(maxTitles);
+
+    if (error || !gapMovies) {
+      console.error('[GEMINI_GAP_SCAN] Failed to query gap movies:', error?.message);
+      this.isCooperativeScanning = false;
+      return;
+    }
+
+    this.cooperativeScanStats.totalGaps = gapMovies.length;
+    console.log(`[GEMINI_GAP_SCAN] 🎯 Identified ${gapMovies.length} movies requiring cooperative AI gap filling.`);
+
+    for (let i = 0; i < gapMovies.length; i++) {
+      if (!this.isCooperativeScanning) {
+        console.log('[GEMINI_GAP_SCAN] Stop signal received.');
+        break;
+      }
+
+      while (this.isCooperativeScanPaused && this.isCooperativeScanning) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+
+      const movie = gapMovies[i];
+      this.cooperativeScanStats.currentTitle = `${movie.title} (#${movie.id})`;
+      this.cooperativeScanStats.lastActiveAt = new Date().toISOString();
+
+      try {
+        const genres = Array.isArray(movie.genres_json) ? movie.genres_json.map((g: any) => g.name || g) : [];
+        const aiResult = await this.enrichMovieWithAi({
+          title: movie.title,
+          year: movie.year,
+          overview: movie.overview,
+          existingGenres: genres,
+        });
+
+        if (!aiResult) {
+          this.cooperativeScanStats.failed++;
+          this.cooperativeScanStats.processed++;
+          continue;
+        }
+
+        const updatePayload: any = {};
+
+        // Fill Arabic title if missing
+        if (!movie.title_ar && aiResult.title_ar) {
+          updatePayload.title_ar = aiResult.title_ar;
+        }
+
+        // Fill Arabic overview if missing
+        if (!movie.overview_ar && aiResult.overview_ar) {
+          updatePayload.overview_ar = aiResult.overview_ar;
+        }
+
+        // Fill Arabic tagline if missing
+        if (!movie.tagline_ar && aiResult.tagline_ar) {
+          updatePayload.tagline_ar = aiResult.tagline_ar;
+        }
+
+        // Fill studios if missing
+        let studios = Array.isArray(movie.studios_json) ? [...movie.studios_json] : [];
+        if (studios.length === 0 && aiResult.primary_studio && aiResult.studio_id) {
+          studios.push({
+            id: aiResult.studio_id,
+            name: aiResult.primary_studio,
+            logo_path: null,
+            origin_country: 'US',
+          });
+          updatePayload.studios_json = studios;
+        }
+
+        // Fill micro-genre keywords
+        let keywords = Array.isArray(movie.keywords_json) ? [...movie.keywords_json] : [];
+        if (Array.isArray(aiResult.thematic_keywords)) {
+          let added = false;
+          aiResult.thematic_keywords.forEach((kw: string, idx: number) => {
+            if (!keywords.some((k: any) => k.name && k.name.toLowerCase() === kw.toLowerCase())) {
+              keywords.push({ id: 899000 + idx, name: kw });
+              added = true;
+            }
+          });
+          if (added) updatePayload.keywords_json = keywords;
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          updatePayload.enriched_at = new Date().toISOString();
+          const { error: updErr } = await supabase
+            .from('movies')
+            .update(updatePayload)
+            .eq('id', movie.id);
+
+          if (!updErr) {
+            this.cooperativeScanStats.enriched++;
+          } else {
+            this.cooperativeScanStats.failed++;
+          }
+        }
+
+        this.cooperativeScanStats.processed++;
+
+        // Controlled pacing: ~300ms between requests (spread across 16 keys = high throughput without exhausting any single key)
+        await new Promise((r) => setTimeout(r, 300));
+      } catch (err: any) {
+        console.warn(`[GEMINI_GAP_SCAN] Error enriching #${movie.id} (${movie.title}):`, err.message);
+        this.cooperativeScanStats.failed++;
+        this.cooperativeScanStats.processed++;
+      }
+    }
+
+    console.log(`[GEMINI_GAP_SCAN] 🏁 Cooperative Gap Scan Complete! Processed: ${this.cooperativeScanStats.processed}, Enriched: ${this.cooperativeScanStats.enriched}`);
+    this.isCooperativeScanning = false;
   }
 }
