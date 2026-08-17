@@ -142,6 +142,17 @@ export class AutoScannerService {
       const pool = GeminiPoolService.getInstance();
       const metrics = pool.getPoolMetrics();
 
+      // ADMIN GATE: AI gap-fill requires explicit admin enablement via POST /api/ai/toggle
+      if (!pool.isAiEnabled()) {
+        console.log('[AUTO-SCANNER] \u{1F512} AI Gap-Fill is DISABLED by admin. Skipping. Enable via POST /api/ai/toggle {"enable": true}.');
+        const supabase = SupabaseService.getClient();
+        const { count } = await supabase
+          .from('movies')
+          .select('id', { count: 'exact', head: true })
+          .or('title_ar.is.null,overview_ar.is.null,studios_json.is.null,studios_json.eq.[]');
+        return { totalGaps: count || 0, enriched: 0, failed: 0 };
+      }
+
       // Check if any AI keys are available (Gemini or Groq)
       const hasAiKeys = metrics.totalKeys > 0 || (metrics.groq?.isConfigured ?? false);
       if (!hasAiKeys) {

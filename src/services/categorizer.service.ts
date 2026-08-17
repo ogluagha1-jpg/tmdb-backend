@@ -95,7 +95,7 @@ export class CategorizerService {
         const metrics = pool.getPoolMetrics();
         const hasAiKeys = metrics.totalKeys > 0 || (metrics.groq?.isConfigured ?? false);
 
-        if (hasAiKeys && !metrics.cooperativeScan.isRunning) {
+        if (hasAiKeys && pool.isAiEnabled() && !metrics.cooperativeScan.isRunning) {
           console.log(`[CATEGORIZER] 🧠 ${gapsCount} movies missing fields. Launching AI cooperative gap-fill...`);
           await pool.startCooperativeGapScan({ maxTitles: Math.min(gapsCount, batchSize) });
 
