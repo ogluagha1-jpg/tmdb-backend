@@ -796,6 +796,68 @@ export function renderDashboardHtml(): string {
       <!-- 16 Key Grid -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 14px;" id="ai-keys-container">
         <!-- Injected via JavaScript -->
+    </div>
+
+    <!-- 🌟 LIVE AI MODEL QUALITY INSPECTION & OUTPUT PREVIEW 🌟 -->
+    <div class="card" style="margin-bottom: 20px; border-color: rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(16, 185, 129, 0.04));">
+      <div class="card-title-row" style="flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="card-icon" style="background: rgba(16, 185, 129, 0.15); color: #10B981; font-size: 20px;">🌟</div>
+          <div>
+            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              AI Model Enrichment Quality Preview
+              <span id="preview-total-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(16, 185, 129, 0.15); color: #10B981; border-color: rgba(16, 185, 129, 0.3);">
+                Loading Quality Samples...
+              </span>
+            </h2>
+            <p class="card-desc">Inspect real-time Arabic titles, dramatic overviews, taglines & studio attributions per AI model</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+          <button id="btn-filter-all" class="btn" onclick="window.filterEnrichedPreview('all')" style="background: rgba(255, 255, 255, 0.15); font-size: 12px; font-weight: 700; color: white;">
+            🌟 All Engines
+          </button>
+          <button id="btn-filter-groq" class="btn" onclick="window.filterEnrichedPreview('groq')" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); font-size: 12px; font-weight: 700; color: #10B981;">
+            🦙 Groq Models
+          </button>
+          <button id="btn-filter-google" class="btn" onclick="window.filterEnrichedPreview('google')" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); font-size: 12px; font-weight: 700; color: #818CF8;">
+            🤖 Google Gemini
+          </button>
+          <button class="btn" onclick="window.fetchRecentEnriched()" style="background: rgba(255, 255, 255, 0.08); font-size: 12px;">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Interactive Dual-Engine Tester Playground -->
+      <div style="margin-top: 14px; padding: 14px; border-radius: 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-subtle);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 12px; font-weight: 800; color: #F59E0B;">🧪 Live Side-by-Side Quality Playground:</span>
+          </div>
+          <div style="display: flex; gap: 8px; flex: 1; min-width: 260px; max-width: 480px;">
+            <input id="test-movie-title" type="text" placeholder="Movie title (e.g. Interstellar)" value="Inception" class="form-input" style="padding: 7px 12px; font-size: 12px;" />
+            <input id="test-movie-year" type="number" placeholder="Year" value="2010" class="form-input" style="width: 80px; padding: 7px 12px; font-size: 12px;" />
+          </div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button class="btn" onclick="window.runLiveEngineTest('groq')" style="background: linear-gradient(135deg, #10B981, #059669); font-size: 11px; font-weight: 700; color: white;">
+              ⚡ Test Groq (~250ms)
+            </button>
+            <button class="btn" onclick="window.runLiveEngineTest('gemini')" style="background: linear-gradient(135deg, #6366F1, #4F46E5); font-size: 11px; font-weight: 700; color: white;">
+              🤖 Test Gemini (~2s)
+            </button>
+          </div>
+        </div>
+        <div id="live-test-result-box" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; background: rgba(11, 14, 20, 0.95); border: 1px solid rgba(245, 158, 11, 0.4);">
+          <!-- Live result injected here -->
+        </div>
+      </div>
+
+      <!-- Real Database Enriched Movie Cards Grid -->
+      <div id="enriched-movies-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-top: 14px;">
+        <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; grid-column: 1 / -1;">
+          ⏳ Fetching recently enriched titles from database...
+        </div>
       </div>
     </div>
 
@@ -1385,6 +1447,166 @@ export function renderDashboardHtml(): string {
       }
     };
 
+    // ── 🌟 REAL-TIME AI QUALITY PREVIEW & DUAL-ENGINE TESTER ──
+    var currentPreviewFilter = 'all';
+    var cachedEnrichedMovies = [];
+
+    window.filterEnrichedPreview = function(filter) {
+      currentPreviewFilter = filter;
+      ['all', 'groq', 'google'].forEach(f => {
+        var btn = document.getElementById('btn-filter-' + f);
+        if (btn) {
+          if (f === filter) {
+            btn.style.background = f === 'groq' ? 'rgba(16, 185, 129, 0.35)' : f === 'google' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255, 255, 255, 0.3)';
+            btn.style.borderColor = 'white';
+          } else {
+            btn.style.background = f === 'groq' ? 'rgba(16, 185, 129, 0.15)' : f === 'google' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255, 255, 255, 0.15)';
+            btn.style.borderColor = 'transparent';
+          }
+        }
+      });
+      window.renderRecentEnrichedCards(cachedEnrichedMovies);
+    };
+
+    window.fetchRecentEnriched = async function() {
+      try {
+        var res = await fetch('/api/ai/recent-enriched?limit=30');
+        var data = await res.json();
+        if (data.success && Array.isArray(data.movies)) {
+          cachedEnrichedMovies = data.movies;
+          var stats = data.stats || {};
+          var badge = document.getElementById('preview-total-badge');
+          if (badge) {
+            badge.innerText = '📊 ' + stats.total + ' Recent Titles (' + stats.groqCount + ' Groq, ' + stats.geminiCount + ' Gemini)';
+          }
+          window.renderRecentEnrichedCards(cachedEnrichedMovies);
+        }
+      } catch (err) {
+        console.error('Fetch enriched preview error:', err);
+      }
+    };
+
+    window.renderRecentEnrichedCards = function(movies) {
+      var grid = document.getElementById('enriched-movies-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      var filtered = movies;
+      if (currentPreviewFilter === 'groq') {
+        filtered = movies.filter(m => m.ai_model && m.ai_model.startsWith('groq/'));
+      } else if (currentPreviewFilter === 'google') {
+        filtered = movies.filter(m => m.ai_model && m.ai_model.startsWith('google/'));
+      }
+
+      if (!filtered || filtered.length === 0) {
+        grid.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; grid-column: 1 / -1;">No movies matching this filter yet. Run Gap-Scan or click Test to populate!</div>';
+        return;
+      }
+
+      filtered.forEach(m => {
+        var isGroq = m.ai_model && m.ai_model.startsWith('groq/');
+        var isGemini = m.ai_model && m.ai_model.startsWith('google/');
+        var modelTag = m.ai_model ? m.ai_model : 'hybrid-auto';
+        var badgeColor = isGroq ? '#10B981' : isGemini ? '#818CF8' : '#F59E0B';
+        var badgeBg = isGroq ? 'rgba(16, 185, 129, 0.15)' : isGemini ? 'rgba(99, 102, 241, 0.15)' : 'rgba(245, 158, 11, 0.15)';
+        var badgeIcon = isGroq ? '🦙' : isGemini ? '🤖' : '✨';
+
+        var studios = Array.isArray(m.studios_json) && m.studios_json.length > 0 
+          ? m.studios_json.map(s => s.name || s).join(', ')
+          : 'Independent / Unlisted';
+
+        var keywords = Array.isArray(m.keywords_json) && m.keywords_json.length > 0
+          ? m.keywords_json.slice(0, 4).map(k => '<span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.06); color:var(--text-secondary);">' + (k.name || k) + '</span>').join(' ')
+          : '';
+
+        var card = document.createElement('div');
+        card.style.background = 'rgba(15, 19, 26, 0.85)';
+        card.style.border = '1px solid ' + (isGroq ? 'rgba(16, 185, 129, 0.25)' : isGemini ? 'rgba(99, 102, 241, 0.25)' : 'var(--border-subtle)');
+        card.style.borderRadius = '10px';
+        card.style.padding = '14px';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.justifyContent = 'space-between';
+        card.style.gap = '10px';
+        card.style.boxShadow = '0 4px 16px rgba(0,0,0,0.4)';
+
+        card.innerHTML = 
+          '<div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;">' +
+              '<div>' +
+                '<h3 style="font-size:14px; font-weight:800; color:white; line-height:1.2;">' + (m.title || 'Untitled') + ' <span style="font-size:11px; color:var(--text-muted); font-weight:500;">(' + (m.year || 'N/A') + ')</span></h3>' +
+                '<div style="font-size:15px; font-weight:800; color:#10B981; margin-top:3px; direction:rtl; text-align:right; font-family:sans-serif;">' + (m.title_ar || 'بدون عنوان') + '</div>' +
+              '</div>' +
+              '<span class="status-badge" style="font-size:10px; padding:2px 6px; background:' + badgeBg + '; color:' + badgeColor + '; border-color:' + badgeColor + '40; white-space:nowrap;">' +
+                badgeIcon + ' ' + modelTag.replace('openai/', '') +
+              '</span>' +
+            '</div>' +
+            (m.tagline_ar ? '<div style="font-size:11px; font-style:italic; color:#F59E0B; margin-bottom:6px; direction:rtl; text-align:right;">💬 "' + m.tagline_ar + '"</div>' : '') +
+            '<div style="font-size:12px; color:var(--text-secondary); line-height:1.4; max-height:80px; overflow-y:auto; margin-bottom:8px; direction:rtl; text-align:right; padding-right:4px;">' +
+              (m.overview_ar || 'لا يوجد ملخص عربي متاح') +
+            '</div>' +
+          '</div>' +
+          '<div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:8px; display:flex; flex-direction:column; gap:6px;">' +
+            '<div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted);">' +
+              '<span>🏢 <strong>Studio:</strong> ' + studios + '</span>' +
+              '<span>⭐ ' + (m.popularity ? m.popularity.toFixed(1) : 'N/A') + '</span>' +
+            '</div>' +
+            (keywords ? '<div style="display:flex; flex-wrap:wrap; gap:4px;">' + keywords + '</div>' : '') +
+          '</div>';
+
+        grid.appendChild(card);
+      });
+    };
+
+    window.runLiveEngineTest = async function(engine) {
+      var title = document.getElementById('test-movie-title').value || 'Inception';
+      var year = parseInt(document.getElementById('test-movie-year').value, 10) || 2010;
+      var box = document.getElementById('live-test-result-box');
+      if (box) {
+        box.style.display = 'block';
+        box.innerHTML = '<div style="color:#F59E0B; font-size:12px; font-weight:700;">⏳ Testing ' + (engine === 'groq' ? 'Groq Open-Source Engine...' : 'Google Gemini Pool...') + '</div>';
+      }
+
+      try {
+        var res = await fetch('/api/ai/test?engine=' + engine, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: title, year: year })
+        });
+        var data = await res.json();
+        if (box) {
+          if (data.success && data.result) {
+            var r = data.result;
+            box.innerHTML = 
+              '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+                '<strong style="color:#10B981; font-size:13px;">✓ Live Test Completed in ' + data.latencyMs + 'ms (' + (data.engineUsed || engine) + ')</strong>' +
+                '<button class="btn" style="padding:2px 8px; font-size:10px;" onclick="document.getElementById(\'raw-json-box\').style.display = document.getElementById(\'raw-json-box\').style.display === \'none\' ? \'block\' : \'none\'">Toggle JSON</button>' +
+              '</div>' +
+              '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">' +
+                '<div>' +
+                  '<div><strong>Arabic Title:</strong> <span style="color:#10B981; font-size:14px; font-weight:800;">' + (r.title_ar || 'N/A') + '</span></div>' +
+                  '<div><strong>Tagline:</strong> <span style="color:#F59E0B;">' + (r.tagline_ar || 'N/A') + '</span></div>' +
+                  '<div><strong>Primary Studio:</strong> ' + (r.primary_studio || 'N/A') + ' (ID: ' + (r.studio_id || 'null') + ')</div>' +
+                '</div>' +
+                '<div>' +
+                  '<div><strong>Arabic Overview:</strong></div>' +
+                  '<div style="color:var(--text-secondary); font-size:11px; line-height:1.3; direction:rtl; text-align:right;">' + (r.overview_ar || 'N/A') + '</div>' +
+                '</div>' +
+              '</div>' +
+              '<div id="raw-json-box" style="display:none; margin-top:8px; max-height:160px; overflow-y:auto; background:rgba(0,0,0,0.6); padding:8px; border-radius:6px; font-family:monospace; font-size:10px; color:#A7F3D0;">' +
+                JSON.stringify(r, null, 2) +
+              '</div>';
+            window.showToast('✓ AI Test Success (' + data.latencyMs + 'ms)!');
+            setTimeout(window.fetchRecentEnriched, 1000);
+          } else {
+            box.innerHTML = '<div style="color:#EF4444; font-size:12px;">⚠️ Test Failed: ' + (data.message || 'Error occurred') + '</div>';
+          }
+        }
+      } catch (err) {
+        if (box) box.innerHTML = '<div style="color:#EF4444; font-size:12px;">❌ Network Error: ' + err.message + '</div>';
+      }
+    };
+
     // Global aliases
     window.fetchMetrics = window.fetchMetrics;
     window.fetchScannerStatus = window.fetchScannerStatus;
@@ -1400,6 +1622,11 @@ export function renderDashboardHtml(): string {
     window.triggerAiCategoryDiscovery = window.triggerAiCategoryDiscovery;
     window.openCreateModal = window.openCreateModal;
     window.closeCreateModal = window.closeCreateModal;
+
+    window.filterEnrichedPreview = window.filterEnrichedPreview;
+    window.fetchRecentEnriched = window.fetchRecentEnriched;
+    window.renderRecentEnrichedCards = window.renderRecentEnrichedCards;
+    window.runLiveEngineTest = window.runLiveEngineTest;
 
     // Direct non-prefixed aliases for inline HTML onclick calls
     var fetchMetrics = window.fetchMetrics;
@@ -1418,12 +1645,17 @@ export function renderDashboardHtml(): string {
     var closeCreateModal = window.closeCreateModal;
     var applyPreset = window.applyPreset;
     var submitCreateCategory = window.submitCreateCategory;
+    var filterEnrichedPreview = window.filterEnrichedPreview;
+    var fetchRecentEnriched = window.fetchRecentEnriched;
+    var runLiveEngineTest = window.runLiveEngineTest;
 
     // Initial load + auto-refresh
     window.fetchMetrics();
     window.fetchScannerStatus();
+    window.fetchRecentEnriched();
     setInterval(window.fetchMetrics, 10000);
     setInterval(window.fetchScannerStatus, 4000);
+    setInterval(window.fetchRecentEnriched, 12000);
   </script>
 </body>
 </html>`;
