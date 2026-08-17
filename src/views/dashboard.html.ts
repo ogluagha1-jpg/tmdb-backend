@@ -747,16 +747,19 @@ export function renderDashboardHtml(): string {
         <div style="display: flex; align-items: center; gap: 10px;">
           <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🤖</div>
           <div>
-            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-              Gemini AI Cooperative Intelligence Hub
+            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              Gemini & Groq AI Cooperative Hub
               <span id="ai-runtime-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(245, 158, 11, 0.15); color: #F59E0B; border-color: rgba(245, 158, 11, 0.3);">
                 ⏸️ Runtime AI: Controlled
               </span>
               <span id="ai-pool-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
-                16 Keys Active
+                Keys Active
+              </span>
+              <span id="groq-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(16, 185, 129, 0.15); color: #10B981; border-color: rgba(16, 185, 129, 0.3);">
+                🦙 Groq Fallback: Ready
               </span>
             </h2>
-            <p class="card-desc">Cooperatively queries the entire database to find titles missing Arabic localization or Studio tags and fills gaps via 16-key AI pool</p>
+            <p class="card-desc">Cooperatively enriches movie metadata with Arabic localization, studio tags, and micro-genres with automatic Groq open-source failover</p>
           </div>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -1083,7 +1086,23 @@ export function renderDashboardHtml(): string {
             toggleAiBtn.innerText = isAiOn ? '🛑 Disable Runtime AI' : '🎛️ Enable Runtime AI';
           }
 
-          safeSetText('ai-pool-badge', aiPool.healthyKeys + ' / ' + aiPool.totalKeys + ' Healthy (' + aiPool.model + ')');
+          safeSetText('ai-pool-badge', aiPool.healthyKeys + ' / ' + aiPool.totalKeys + ' Gemini Keys (' + aiPool.model + ')');
+
+          const groq = aiPool.groq;
+          const groqBadge = document.getElementById('groq-badge');
+          if (groqBadge) {
+            if (groq && groq.isConfigured) {
+              groqBadge.innerText = '🦙 Groq Fallback: Active (' + groq.totalKeys + ' keys)';
+              groqBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+              groqBadge.style.color = '#10B981';
+              groqBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            } else {
+              groqBadge.innerText = '🦙 Groq Fallback: Ready (GROQ_API_KEY)';
+              groqBadge.style.background = 'rgba(255, 255, 255, 0.06)';
+              groqBadge.style.color = 'var(--text-muted)';
+              groqBadge.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+            }
+          }
 
           // Gap Scan Status
           const gap = aiPool.cooperativeScan || {};
@@ -1109,21 +1128,37 @@ export function renderDashboardHtml(): string {
 
           if (aiContainer) {
             aiContainer.innerHTML = '';
-            if (Array.isArray(aiPool.keys) && aiPool.keys.length > 0) {
-              aiPool.keys.forEach(k => {
+            const allKeys = [...(Array.isArray(aiPool.keys) ? aiPool.keys : [])];
+            if (groq && Array.isArray(groq.keys)) {
+              groq.keys.forEach(gk => {
+                allKeys.push({
+                  index: 'Groq-' + gk.index,
+                  keyMasked: gk.keyMasked,
+                  status: gk.status,
+                  rpmCount: gk.rpmCount,
+                  totalSuccess: gk.totalSuccess,
+                  isGroq: true,
+                });
+              });
+            }
+
+            if (allKeys.length > 0) {
+              allKeys.forEach(k => {
                 const div = document.createElement('div');
                 div.className = 'studio-pill';
                 div.style.padding = '8px 12px';
                 const isHealthy = k.status === 'healthy';
                 const statusColor = isHealthy ? '#10B981' : (k.status === 'cooldown' ? '#F59E0B' : '#EF4444');
+                const tag = k.isGroq ? '🦙 Groq #' + k.index.replace('Groq-', '') : 'Key #' + k.index;
+                const maxRpm = k.isGroq ? '30' : '15';
                 div.innerHTML =
                   '<div>' +
                     '<div style="font-size: 12px; font-weight: 700; color: white; display: flex; align-items: center; gap: 6px;">' +
                       '<span style="width: 7px; height: 7px; border-radius: 50%; background: ' + statusColor + '; display: inline-block;"></span>' +
-                      'Key #' + k.index + ' <span style="font-size: 10px; color: var(--text-muted); font-family: monospace;">(' + k.keyMasked + ')</span>' +
+                      tag + ' <span style="font-size: 10px; color: var(--text-muted); font-family: monospace;">(' + k.keyMasked + ')</span>' +
                     '</div>' +
                     '<div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">' +
-                      'RPM: ' + k.rpmCount + '/15 • Total: ' + k.totalSuccess +
+                      'RPM: ' + k.rpmCount + '/' + maxRpm + ' • Total: ' + k.totalSuccess +
                     '</div>' +
                   '</div>' +
                   '<div class="studio-count-badge" style="color: ' + statusColor + '; font-size: 10px; text-transform: uppercase;">' + k.status + '</div>';
@@ -1131,7 +1166,7 @@ export function renderDashboardHtml(): string {
               });
             } else {
               aiContainer.innerHTML = '<div style="grid-column: 1 / -1; padding: 14px; background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.35); border-radius: 8px; text-align: center; color: #F59E0B; font-size: 12px; font-weight: 600;">' +
-                '⚠️ No Gemini API Keys Configured in Railway Variables.<br><span style="font-size:11px; opacity:0.8; font-weight:400;">Go to Railway Dashboard &rarr; tmdb-backend &rarr; Variables tab &rarr; add <code>GEMINI_API_KEYS</code>.</span>' +
+                '⚠️ No AI Keys Configured in Railway Variables.<br><span style="font-size:11px; opacity:0.8; font-weight:400;">Add <code>GEMINI_API_KEYS</code> or <code>GROQ_API_KEY</code> in Railway Dashboard &rarr; Variables.</span>' +
                 '</div>';
             }
           }

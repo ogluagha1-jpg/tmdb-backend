@@ -77,8 +77,23 @@ export class GeminiPoolService {
     'gemini-3.5-flash',
   ];
 
+  // ── 🦙 Groq Open-Source Fallback Pool (Llama 3.3 70B / 3.1 8B) ──
+  private groqKeyPool: string[] = [];
+  private groqStats: Map<string, {
+    rpmTimestamps: number[];
+    totalSuccess: number;
+    totalErrors: number;
+    cooldownUntil: number | null;
+    status: 'healthy' | 'cooldown' | 'exhausted' | 'invalid';
+    lastUsedAt: number | null;
+  }> = new Map();
+  private groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  private groqCandidateModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+  private groqRoundRobinCursor = 0;
+
   private constructor() {
     this.initializePool();
+    this.initializeGroqPool();
   }
 
   public static getInstance(): GeminiPoolService {
@@ -128,7 +143,32 @@ export class GeminiPoolService {
     if (this.keyPool.length > 0) {
       console.log(`[GEMINI_POOL] 🤖 Initialized Gemini AI Pool with ${this.keyPool.length} secure environment keys (Model: ${this.model})`);
     } else {
-      console.warn(`[GEMINI_POOL] ⚠️ No GEMINI_API_KEYS found in environment variables. AI enrichment will remain dormant until keys are provided in Railway.`);
+      console.warn(`[GEMINI_POOL] ⚠️ No GEMINI_API_KEYS found in environment variables.`);
+    }
+  }
+
+  private initializeGroqPool(): void {
+    const raw = (process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '').trim();
+    const envKeys = raw
+      .split(/[\r\n,;]+/)
+      .map((k) => k.replace(/['" \t]/g, '').trim())
+      .filter((k) => k.length > 10 && !k.startsWith('#'));
+
+    this.groqKeyPool = Array.from(new Set(envKeys));
+
+    for (const k of this.groqKeyPool) {
+      this.groqStats.set(k, {
+        rpmTimestamps: [],
+        totalSuccess: 0,
+        totalErrors: 0,
+        cooldownUntil: null,
+        status: 'healthy',
+        lastUsedAt: null,
+      });
+    }
+
+    if (this.groqKeyPool.length > 0) {
+      console.log(`[GROQ_POOL] 🦙 Initialized Groq Open-Source Fallback Pool with ${this.groqKeyPool.length} keys (Model: ${this.groqModel})`);
     }
   }
 
@@ -183,95 +223,199 @@ export class GeminiPoolService {
     return null;
   }
 
-  /// Generates a structured JSON completion with multi-key rotation, model fallback cascade, and auto-retry
-  public async generateJson<T>(prompt: string, retries = 6): Promise<T | null> {
-    if (this.keyPool.length === 0) return null;
+  /// Calls Groq Open-Source API with Meta Llama 3.3 70B & native JSON mode
+  public async callGroqOpenSource<T>(prompt: string): Promise<T | null> {
+    if (this.groqKeyPool.length === 0) return null;
 
-    let attempt = 0;
-    while (attempt < retries) {
-      attempt++;
-      const selected = this.getBestKey();
-      if (!selected) {
-        console.warn('[GEMINI_POOL] ⚠️ All Gemini keys are temporarily cooling down. Waiting 2s...');
-        await new Promise((r) => setTimeout(r, 2000));
-        continue;
+    const now = Date.now();
+    const len = this.groqKeyPool.length;
+    let selectedKey: string | null = null;
+    let selectedIdx = -1;
+
+    for (let offset = 0; offset < len; offset++) {
+      const idx = (this.groqRoundRobinCursor + offset) % len;
+      const k = this.groqKeyPool[idx];
+      const stat = this.groqStats.get(k)!;
+
+      stat.rpmTimestamps = stat.rpmTimestamps.filter((t) => now - t < 60000);
+      if (stat.cooldownUntil && now >= stat.cooldownUntil) {
+        stat.cooldownUntil = null;
+        stat.status = 'healthy';
       }
 
-      const { key, index } = selected;
-      const stat = this.keyStats.get(key)!;
-      const now = Date.now();
+      if (stat.status === 'invalid') continue;
+      if (stat.cooldownUntil && now < stat.cooldownUntil) continue;
+      if (stat.rpmTimestamps.length < 28) {
+        selectedKey = k;
+        selectedIdx = idx;
+        break;
+      }
+    }
 
-      // Pick model from candidate list based on retry attempt
-      const targetModel = this.candidateModels[(attempt - 1) % this.candidateModels.length];
+    if (!selectedKey || selectedIdx === -1) {
+      console.warn('[GROQ_POOL] ⚠️ All Groq keys in cooldown or saturated.');
+      return null;
+    }
 
-      stat.rpmTimestamps.push(now);
-      stat.lastUsedAt = now;
-      this.totalAiRequests++;
+    this.groqRoundRobinCursor = (selectedIdx + 1) % len;
+    const stat = this.groqStats.get(selectedKey)!;
+    stat.rpmTimestamps.push(now);
+    stat.lastUsedAt = now;
 
+    const t0 = Date.now();
+    for (const m of this.groqCandidateModels) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${key}`;
-        const response = await axios.post(
-          url,
+        const res = await axios.post(
+          'https://api.groq.com/openai/v1/chat/completions',
           {
-            contents: [
+            model: m,
+            messages: [
               {
-                parts: [{ text: prompt }],
+                role: 'system',
+                content: 'You are the lead cinema categorization and localization engine for a premium streaming platform (Teraflix). Always output pure valid JSON strictly matching the requested schema.',
+              },
+              {
+                role: 'user',
+                content: prompt,
               },
             ],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.2,
-            },
+            response_format: { type: 'json_object' },
+            temperature: 0.2,
           },
           {
-            timeout: 30000,
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              Authorization: `Bearer ${selectedKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 20000,
           }
         );
 
-        let rawText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) {
-          throw new Error('Empty Gemini response content');
-        }
+        const content = res.data?.choices?.[0]?.message?.content;
+        if (!content) throw new Error('Empty Groq response content');
 
-        // Clean any markdown fences if present
-        rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-
-        const parsed = JSON.parse(rawText) as T;
+        const parsed = JSON.parse(content.trim()) as T;
         stat.totalSuccess++;
         this.totalAiSuccess++;
+        console.log(`[GROQ_FALLBACK] 🚀 Llama 3.3 70B successfully completed AI enrichment in ${Date.now() - t0}ms!`);
         return parsed;
       } catch (err: any) {
         stat.totalErrors++;
-        this.totalAiErrors++;
-
         const status = err.response?.status;
         const msg = err.response?.data?.error?.message || err.message;
 
-        // Exponential backoff with jitter
-        const backoffMs = Math.min(500 * Math.pow(1.5, attempt) + Math.floor(Math.random() * 400), 4000);
-
-        if (status === 429 || /quota|resource_exhausted/i.test(msg)) {
-          console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 180s. Rotating to next key...`);
+        if (status === 429) {
+          console.warn(`[GROQ_POOL] 🟡 Groq Key #${selectedIdx + 1} hit 429 quota. Cooling 60s...`);
           stat.status = 'cooldown';
-          stat.cooldownUntil = Date.now() + 180000;
-          await new Promise((r) => setTimeout(r, backoffMs));
-        } else if (status === 503 || status === 500 || status === 504 || /overload|high demand|unavailable/i.test(msg)) {
-          console.warn(`[GEMINI_POOL] ⏳ Model ${targetModel} temporary overload/spike (HTTP ${status}). Key #${index + 1} cooling 30s. Falling back to alternative model...`);
-          stat.cooldownUntil = Date.now() + 30000;
-          await new Promise((r) => setTimeout(r, backoffMs));
-        } else if (status === 404 || /not found|no longer available/i.test(msg)) {
-          console.warn(`[GEMINI_POOL] ⚠️ Model ${targetModel} unavailable. Auto-falling back to next model...`);
-          await new Promise((r) => setTimeout(r, 500));
-        } else if (status === 400 || status === 403 || /api_key_invalid|no longer available/i.test(msg)) {
-          console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid/revoked: ${msg}`);
+          stat.cooldownUntil = Date.now() + 60000;
+        } else if (status === 401 || status === 403) {
+          console.error(`[GROQ_POOL] 🔴 Groq Key #${selectedIdx + 1} invalid/unauthorized: ${msg}`);
           stat.status = 'invalid';
+          break;
         } else {
-          console.warn(`[GEMINI_POOL] ⚠️ Key #${index + 1} request error: ${msg}. Auto-rotating...`);
-          stat.cooldownUntil = Date.now() + 15000;
-          await new Promise((r) => setTimeout(r, 500));
+          console.warn(`[GROQ_POOL] ⚠️ Groq model ${m} error: ${msg}. Trying next candidate...`);
         }
       }
+    }
+
+    return null;
+  }
+
+  /// Generates a structured JSON completion with multi-key rotation, model fallback cascade, and Groq open-source failover
+  public async generateJson<T>(prompt: string, retries = 6): Promise<T | null> {
+    // 1. Try Primary Gemini Pool if keys configured
+    if (this.keyPool.length > 0) {
+      let attempt = 0;
+      while (attempt < retries) {
+        attempt++;
+        const selected = this.getBestKey();
+        if (!selected) {
+          console.warn('[GEMINI_POOL] ⚠️ All Gemini keys in cooldown/exhausted. Attempting Groq Open-Source Fallback...');
+          break;
+        }
+
+        const { key, index } = selected;
+        const stat = this.keyStats.get(key)!;
+        const now = Date.now();
+
+        // Pick model from candidate list based on retry attempt
+        const targetModel = this.candidateModels[(attempt - 1) % this.candidateModels.length];
+
+        stat.rpmTimestamps.push(now);
+        stat.lastUsedAt = now;
+        this.totalAiRequests++;
+
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${key}`;
+          const response = await axios.post(
+            url,
+            {
+              contents: [
+                {
+                  parts: [{ text: prompt }],
+                },
+              ],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.2,
+              },
+            },
+            {
+              timeout: 30000,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+
+          let rawText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) {
+            throw new Error('Empty Gemini response content');
+          }
+
+          // Clean any markdown fences if present
+          rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+
+          const parsed = JSON.parse(rawText) as T;
+          stat.totalSuccess++;
+          this.totalAiSuccess++;
+          return parsed;
+        } catch (err: any) {
+          stat.totalErrors++;
+          this.totalAiErrors++;
+
+          const status = err.response?.status;
+          const msg = err.response?.data?.error?.message || err.message;
+
+          // Exponential backoff with jitter
+          const backoffMs = Math.min(500 * Math.pow(1.5, attempt) + Math.floor(Math.random() * 400), 4000);
+
+          if (status === 429 || /quota|resource_exhausted/i.test(msg)) {
+            console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 180s. Rotating to next key...`);
+            stat.status = 'cooldown';
+            stat.cooldownUntil = Date.now() + 180000;
+            await new Promise((r) => setTimeout(r, backoffMs));
+          } else if (status === 503 || status === 500 || status === 504 || /overload|high demand|unavailable/i.test(msg)) {
+            console.warn(`[GEMINI_POOL] ⏳ Model ${targetModel} temporary overload/spike (HTTP ${status}). Key #${index + 1} cooling 30s. Falling back to alternative model...`);
+            stat.cooldownUntil = Date.now() + 30000;
+            await new Promise((r) => setTimeout(r, backoffMs));
+          } else if (status === 404 || /not found|no longer available/i.test(msg)) {
+            console.warn(`[GEMINI_POOL] ⚠️ Model ${targetModel} unavailable. Auto-falling back to next model...`);
+            await new Promise((r) => setTimeout(r, 500));
+          } else if (status === 400 || status === 403 || /api_key_invalid|no longer available/i.test(msg)) {
+            console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid/revoked: ${msg}`);
+            stat.status = 'invalid';
+          } else {
+            console.warn(`[GEMINI_POOL] ⚠️ Key #${index + 1} request error: ${msg}. Auto-rotating...`);
+            stat.cooldownUntil = Date.now() + 15000;
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+      }
+    }
+
+    // 2. Seamless Failover: Call Groq Open-Source Llama 3.3 70B
+    if (this.groqKeyPool.length > 0) {
+      const groqResult = await this.callGroqOpenSource<T>(prompt);
+      if (groqResult) return groqResult;
     }
 
     return null;
@@ -401,6 +545,19 @@ Respond ONLY in valid JSON conforming to this schema:
       });
     });
 
+    const groqKeys = this.groqKeyPool.map((k, idx) => {
+      const stat = this.groqStats.get(k)!;
+      stat.rpmTimestamps = stat.rpmTimestamps.filter((t) => now - t < 60000);
+      return {
+        index: idx + 1,
+        keyMasked: `${k.slice(0, 8)}...${k.slice(-4)}`,
+        status: stat.status,
+        rpmCount: stat.rpmTimestamps.length,
+        totalSuccess: stat.totalSuccess,
+        totalErrors: stat.totalErrors,
+      };
+    });
+
     const completionPct = this.cooperativeScanStats.totalGaps > 0
       ? parseFloat(((this.cooperativeScanStats.processed / this.cooperativeScanStats.totalGaps) * 100).toFixed(1))
       : 0;
@@ -415,6 +572,12 @@ Respond ONLY in valid JSON conforming to this schema:
       totalErrors: this.totalAiErrors,
       model: this.model,
       isAiEnabled: this.isAiEnrichmentEnabled,
+      groq: {
+        isConfigured: this.groqKeyPool.length > 0,
+        totalKeys: this.groqKeyPool.length,
+        model: this.groqModel,
+        keys: groqKeys,
+      },
       cooperativeScan: {
         isRunning: this.isCooperativeScanning,
         isPaused: this.isCooperativeScanPaused,
@@ -436,10 +599,10 @@ Respond ONLY in valid JSON conforming to this schema:
     message: string;
     totalGaps?: number;
   }> {
-    if (this.keyPool.length === 0) {
+    if (this.keyPool.length === 0 && this.groqKeyPool.length === 0) {
       return {
         started: false,
-        message: 'No GEMINI_API_KEYS found. Please add your Gemini API keys to Railway Environment Variables.',
+        message: 'No AI keys found. Please add GEMINI_API_KEYS or GROQ_API_KEY in Railway Variables.',
       };
     }
 
@@ -497,8 +660,8 @@ Respond ONLY in valid JSON conforming to this schema:
     const { SupabaseService } = await import('./supabase.service');
     const supabase = SupabaseService.getClient();
 
-    if (this.keyPool.length === 0) {
-      console.error('[GEMINI_GAP_SCAN] ⛔ No Gemini keys available. Aborting gap scan.');
+    if (this.keyPool.length === 0 && this.groqKeyPool.length === 0) {
+      console.error('[GEMINI_GAP_SCAN] ⛔ No AI keys available (Gemini or Groq). Aborting gap scan.');
       this.isCooperativeScanning = false;
       return;
     }
@@ -552,9 +715,10 @@ Respond ONLY in valid JSON conforming to this schema:
           this.cooperativeScanStats.processed++;
 
           // Check if all keys became invalid/revoked
-          const usableKeys = Array.from(this.keyStats.values()).filter((s) => s.status !== 'invalid');
-          if (usableKeys.length === 0) {
-            console.error('[GEMINI_GAP_SCAN] ⛔ All Gemini API keys are invalid or revoked. Halting cooperative gap scan.');
+          const usableGemini = Array.from(this.keyStats.values()).filter((s) => s.status !== 'invalid');
+          const usableGroq = Array.from(this.groqStats.values()).filter((s) => s.status !== 'invalid');
+          if (usableGemini.length === 0 && usableGroq.length === 0) {
+            console.error('[GEMINI_GAP_SCAN] ⛔ All Gemini and Groq API keys are invalid or revoked. Halting cooperative gap scan.');
             this.cooperativeScanStats.currentTitle = 'Stopped: All keys invalid/revoked';
             this.isCooperativeScanning = false;
             break;
