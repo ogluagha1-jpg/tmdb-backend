@@ -228,26 +228,36 @@ app.post('/api/scan/reset', async (_req: Request, res: Response) => {
   }
 });
 
-// 15. Test Gemini AI Pool Execution
+// 15. Test Single Movie AI Enrichment Endpoint
 app.post('/api/ai/test', async (req: Request, res: Response) => {
   try {
-    const title = (req.body?.title as string) || (req.query?.title as string) || 'Inception';
-    const year = req.body?.year || req.query?.year || 2010;
+    const title = req.body?.title || 'Inception';
+    const year = req.body?.year || 2010;
     const overview = req.body?.overview || 'A thief who steals corporate secrets through dream-sharing technology...';
 
     const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const poolMetrics = GeminiPoolService.getInstance().getPoolMetrics();
+
+    if (poolMetrics.totalKeys === 0) {
+      return res.status(200).json({
+        success: false,
+        message: 'No GEMINI_API_KEYS found in Railway. Please add your Gemini keys in Railway Variables.',
+        pool: poolMetrics,
+      });
+    }
+
     const result = await GeminiPoolService.getInstance().enrichMovieWithAi({
       title,
       year,
       overview,
     });
 
-    const poolMetrics = GeminiPoolService.getInstance().getPoolMetrics();
+    const updatedPool = GeminiPoolService.getInstance().getPoolMetrics();
     res.status(200).json({
       success: !!result,
-      message: result ? `AI successfully enriched "${title}"!` : 'AI enrichment failed',
+      message: result ? `AI successfully enriched "${title}"!` : 'AI test failed (keys cooling down or revoked by Google)',
       result,
-      pool: poolMetrics,
+      pool: updatedPool,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

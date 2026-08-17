@@ -1107,27 +1107,33 @@ export function renderDashboardHtml(): string {
           safeSetText('ai-gap-enriched-count', (gap.enriched || 0).toLocaleString());
           safeSetText('ai-gap-failed-count', (gap.failed || 0).toLocaleString());
 
-          if (aiContainer && Array.isArray(aiPool.keys)) {
+          if (aiContainer) {
             aiContainer.innerHTML = '';
-            aiPool.keys.forEach(k => {
-              const div = document.createElement('div');
-              div.className = 'studio-pill';
-              div.style.padding = '8px 12px';
-              const isHealthy = k.status === 'healthy';
-              const statusColor = isHealthy ? '#10B981' : (k.status === 'cooldown' ? '#F59E0B' : '#EF4444');
-              div.innerHTML =
-                '<div>' +
-                  '<div style="font-size: 12px; font-weight: 700; color: white; display: flex; align-items: center; gap: 6px;">' +
-                    '<span style="width: 7px; height: 7px; border-radius: 50%; background: ' + statusColor + '; display: inline-block;"></span>' +
-                    'Key #' + k.index + ' <span style="font-size: 10px; color: var(--text-muted); font-family: monospace;">(' + k.keyMasked + ')</span>' +
+            if (Array.isArray(aiPool.keys) && aiPool.keys.length > 0) {
+              aiPool.keys.forEach(k => {
+                const div = document.createElement('div');
+                div.className = 'studio-pill';
+                div.style.padding = '8px 12px';
+                const isHealthy = k.status === 'healthy';
+                const statusColor = isHealthy ? '#10B981' : (k.status === 'cooldown' ? '#F59E0B' : '#EF4444');
+                div.innerHTML =
+                  '<div>' +
+                    '<div style="font-size: 12px; font-weight: 700; color: white; display: flex; align-items: center; gap: 6px;">' +
+                      '<span style="width: 7px; height: 7px; border-radius: 50%; background: ' + statusColor + '; display: inline-block;"></span>' +
+                      'Key #' + k.index + ' <span style="font-size: 10px; color: var(--text-muted); font-family: monospace;">(' + k.keyMasked + ')</span>' +
+                    '</div>' +
+                    '<div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">' +
+                      'RPM: ' + k.rpmCount + '/15 • Total: ' + k.totalSuccess +
+                    '</div>' +
                   '</div>' +
-                  '<div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">' +
-                    'RPM: ' + k.rpmCount + '/15 • Total: ' + k.totalSuccess +
-                  '</div>' +
-                '</div>' +
-                '<div class="studio-count-badge" style="color: ' + statusColor + '; font-size: 10px; text-transform: uppercase;">' + k.status + '</div>';
-              aiContainer.appendChild(div);
-            });
+                  '<div class="studio-count-badge" style="color: ' + statusColor + '; font-size: 10px; text-transform: uppercase;">' + k.status + '</div>';
+                aiContainer.appendChild(div);
+              });
+            } else {
+              aiContainer.innerHTML = '<div style="grid-column: 1 / -1; padding: 14px; background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.35); border-radius: 8px; text-align: center; color: #F59E0B; font-size: 12px; font-weight: 600;">' +
+                '⚠️ No Gemini API Keys Configured in Railway Variables.<br><span style="font-size:11px; opacity:0.8; font-weight:400;">Go to Railway Dashboard &rarr; tmdb-backend &rarr; Variables tab &rarr; add <code>GEMINI_API_KEYS</code>.</span>' +
+                '</div>';
+            }
           }
         }
 
