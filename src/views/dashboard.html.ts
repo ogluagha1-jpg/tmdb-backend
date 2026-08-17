@@ -552,20 +552,138 @@ export function renderDashboardHtml(): string {
       text-align: center;
     }
 
-    #toast.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    @media (max-width: 768px) {
+    /* ── Mobile & Responsive Breakpoints ── */
+    @media (max-width: 992px) {
       .grid-4 {
         grid-template-columns: 1fr 1fr;
       }
-      .grid-2 {
-        grid-template-columns: 1fr;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 12px 10px;
       }
+
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .header-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+
       .tabs-nav-bar {
         grid-template-columns: 1fr;
+        gap: 6px;
+        padding: 4px;
+      }
+
+      .tab-btn {
+        padding: 10px 14px;
+        gap: 10px;
+      }
+
+      .tab-icon {
+        font-size: 20px;
+      }
+
+      .tab-title {
+        font-size: 13px;
+      }
+
+      .tab-sub {
+        font-size: 10px;
+      }
+
+      .grid-4 {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .card {
+        padding: 12px;
+        border-radius: 12px;
+      }
+
+      .card-value {
+        font-size: 20px;
+      }
+
+      .grid-2 {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .studios-grid {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 6px;
+      }
+
+      .studio-pill {
+        padding: 8px 10px;
+      }
+
+      .studio-name {
+        font-size: 11px;
+      }
+
+      .studio-name-ar {
+        font-size: 9px;
+      }
+
+      .studio-count-badge {
+        font-size: 11px;
+        padding: 2px 6px;
+      }
+
+      #enriched-movies-container {
+        grid-template-columns: 1fr !important;
+      }
+
+      #enriched-search-input {
+        width: 100% !important;
+      }
+
+      .modal-card {
+        padding: 16px;
+        max-width: 95vw;
+        max-height: 88vh;
+        overflow-y: auto;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .brand-title {
+        font-size: 15px;
+      }
+
+      .brand-logo {
+        font-size: 14px;
+        padding: 4px 8px;
+      }
+
+      .btn {
+        padding: 7px 10px;
+        font-size: 11px;
+      }
+
+      .card-value {
+        font-size: 18px;
+      }
+
+      .card-label {
+        font-size: 10px;
+      }
+
+      .card-desc {
+        font-size: 10px;
+      }
+
+      .table-container {
+        -webkit-overflow-scrolling: touch;
       }
     }
   </style>
