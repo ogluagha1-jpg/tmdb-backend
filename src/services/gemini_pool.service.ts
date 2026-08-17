@@ -53,22 +53,6 @@ export class GeminiPoolService {
     lastActiveAt: null as string | null,
   };
 
-  // Verified Active Keys Pool
-  private defaultKeyPool: string[] = [
-    'AIzaSyB4dZhhGMDCbA-v71flTpIq0ooqCdothHE',
-    'AIzaSyCkSOGdsmezbwTU46b4kUP3kj3hvjlj1k0',
-    'AIzaSyCNDEoKgXhYXROBEjYZpo064XVAE_tC8Vs',
-    'AIzaSyCFuD9GP70Z_tja18fbvi_O4QxMTnMDhB4',
-    'AIzaSyAG3u7BQ1CiuKMXFv9LU7sKFjqTbeTGSzQ',
-    'AIzaSyCVqJ4nihAFSdS-vo2LwjNZW8w16CPuYoQ',
-    'AIzaSyC97H3IY4UnaNWqlUvgJ6w9ShMwAH72IjY',
-    'AIzaSyCcjC5n-DCroHyTH9P6YDHzt-JXjiE-22Y',
-    'AIzaSyBjc5BuffnZeXaRgKTLpGaw2PLdd11IzJQ',
-    'AIzaSyDcOpg8BIcvua3VUQxpjETCSuhRk8X5_YE',
-    'AIzaSyDHbIYWkPpQU7YOXs_CqCtpkRu9jlka9AI',
-    'AIzaSyCHztHJNN11mmEJNPXedo6K-es7k5CbHdE',
-  ];
-
   private keyPool: string[] = [];
   private keyStats: Map<string, {
     rpmTimestamps: number[];
@@ -118,9 +102,8 @@ export class GeminiPoolService {
 
     const customSingle = process.env.GEMINI_API_KEY ? [process.env.GEMINI_API_KEY.trim()] : [];
 
-    // If user provided keys in Railway environment variables, use them directly
-    const userEnvKeys = Array.from(new Set([...envKeys, ...customSingle])).filter((k) => k.length > 10);
-    this.keyPool = userEnvKeys.length > 0 ? userEnvKeys : this.defaultKeyPool;
+    const activeKeys = Array.from(new Set([...envKeys, ...customSingle])).filter((k) => k.length > 10);
+    this.keyPool = activeKeys;
 
     for (const k of this.keyPool) {
       this.keyStats.set(k, {
@@ -133,7 +116,11 @@ export class GeminiPoolService {
       });
     }
 
-    console.log(`[GEMINI_POOL] 🤖 Initialized Gemini AI Pool with ${this.keyPool.length} keys (Model: ${this.model})`);
+    if (this.keyPool.length > 0) {
+      console.log(`[GEMINI_POOL] 🤖 Initialized Gemini AI Pool with ${this.keyPool.length} secure environment keys (Model: ${this.model})`);
+    } else {
+      console.warn(`[GEMINI_POOL] ⚠️ No GEMINI_API_KEYS found in environment variables. AI enrichment will remain dormant until keys are provided in Railway.`);
+    }
   }
 
   private roundRobinCursor = 0;
