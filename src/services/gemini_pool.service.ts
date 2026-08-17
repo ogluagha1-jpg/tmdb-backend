@@ -499,6 +499,12 @@ Respond ONLY in valid JSON conforming to this schema:
     totalErrors: number;
     model: string;
     isAiEnabled: boolean;
+    groq?: {
+      isConfigured: boolean;
+      totalKeys: number;
+      model: string;
+      keys: any[];
+    };
     cooperativeScan: {
       isRunning: boolean;
       isPaused: boolean;
