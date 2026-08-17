@@ -186,8 +186,15 @@ export class GeminiPoolService {
     return null;
   }
 
-  /// Generates a structured JSON completion with multi-key rotation and auto-retry
-  public async generateJson<T>(prompt: string, retries = 5): Promise<T | null> {
+  // Candidate models in fallback order
+  private candidateModels = [
+    process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+  ];
+
+  /// Generates a structured JSON completion with multi-key rotation, model fallback cascade, and auto-retry
+  public async generateJson<T>(prompt: string, retries = 6): Promise<T | null> {
     if (this.keyPool.length === 0) return null;
 
     let attempt = 0;
@@ -204,12 +211,15 @@ export class GeminiPoolService {
       const stat = this.keyStats.get(key)!;
       const now = Date.now();
 
+      // Pick model from candidate list based on retry attempt
+      const targetModel = this.candidateModels[(attempt - 1) % this.candidateModels.length];
+
       stat.rpmTimestamps.push(now);
       stat.lastUsedAt = now;
       this.totalAiRequests++;
 
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${key}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${key}`;
         const response = await axios.post(
           url,
           {
@@ -229,12 +239,15 @@ export class GeminiPoolService {
           }
         );
 
-        const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) {
+        let rawText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) {
           throw new Error('Empty Gemini response content');
         }
 
-        const parsed = JSON.parse(text) as T;
+        // Clean any markdown fences if present
+        rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+
+        const parsed = JSON.parse(rawText) as T;
         stat.totalSuccess++;
         this.totalAiSuccess++;
         return parsed;
@@ -245,13 +258,23 @@ export class GeminiPoolService {
         const status = err.response?.status;
         const msg = err.response?.data?.error?.message || err.message;
 
+        // Exponential backoff with jitter
+        const backoffMs = Math.min(500 * Math.pow(1.5, attempt) + Math.floor(Math.random() * 400), 4000);
+
         if (status === 429 || /quota|resource_exhausted/i.test(msg)) {
-          console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 180s. Auto-rotating...`);
+          console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 180s. Rotating to next key...`);
           stat.status = 'cooldown';
           stat.cooldownUntil = Date.now() + 180000;
-          await new Promise((r) => setTimeout(r, 1000));
+          await new Promise((r) => setTimeout(r, backoffMs));
+        } else if (status === 503 || status === 500 || status === 504 || /overload|high demand|unavailable/i.test(msg)) {
+          console.warn(`[GEMINI_POOL] ⏳ Model ${targetModel} temporary overload/spike (HTTP ${status}). Key #${index + 1} cooling 30s. Falling back to alternative model...`);
+          stat.cooldownUntil = Date.now() + 30000;
+          await new Promise((r) => setTimeout(r, backoffMs));
+        } else if (status === 404 || /not found|no longer available/i.test(msg)) {
+          console.warn(`[GEMINI_POOL] ⚠️ Model ${targetModel} unavailable. Auto-falling back to next model...`);
+          await new Promise((r) => setTimeout(r, 500));
         } else if (status === 400 || status === 403 || /api_key_invalid|no longer available/i.test(msg)) {
-          console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid: ${msg}`);
+          console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid/revoked: ${msg}`);
           stat.status = 'invalid';
         } else {
           console.warn(`[GEMINI_POOL] ⚠️ Key #${index + 1} request error: ${msg}. Auto-rotating...`);
