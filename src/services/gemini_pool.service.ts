@@ -414,19 +414,38 @@ export class GeminiPoolService {
     return null;
   }
 
-  /// Generates a structured JSON completion with Groq Llama 3.3 70B as PRIMARY and Gemini as SECONDARY fallback
-  public async generateJson<T>(prompt: string, retries = 6): Promise<T | null> {
-    // 1. PRIMARY ENGINE: Groq Open-Source (Meta Llama 3.3 70B / Llama 3.1 8B)
-    if (this.groqKeyPool.length > 0) {
-      const groqResult = await this.callGroqOpenSource<T>(prompt);
-      if (groqResult) return groqResult;
-      console.warn('[AI_GATEWAY] ⚠️ Groq Primary Engine returned null or in cooldown. Falling back to Gemini secondary pool...');
-    }
+  /// Generates a structured JSON completion with intelligent Task-Specific Quality Routing:
+  /// - 'gemini': Gemini is Primary (for poetic Arabic localization, synopses, and cultural context), Groq is Fallback.
+  /// - 'groq': Groq Llama 3.3 70B is Primary (for deep micro-genre taxonomy, creative shelves, and strict formatting), Gemini is Fallback.
+  public async generateJson<T>(
+    prompt: string,
+    options?: { preference?: 'gemini' | 'groq'; retries?: number }
+  ): Promise<T | null> {
+    const preference = options?.preference || 'gemini';
+    const retries = options?.retries || 6;
 
-    // 2. SECONDARY FALLBACK: Google Gemini Multi-Key Pool
-    if (this.keyPool.length > 0) {
-      const geminiResult = await this.callGeminiPool<T>(prompt, retries);
-      if (geminiResult) return geminiResult;
+    if (preference === 'groq') {
+      // 1. Groq as Primary for Taxonomy, Creative Curation & Dynamic Shelves
+      if (this.groqKeyPool.length > 0) {
+        const groqRes = await this.callGroqOpenSource<T>(prompt);
+        if (groqRes) return groqRes;
+        console.warn('[AI_GATEWAY] ⚠️ Groq Primary returned null. Falling back to Gemini secondary pool...');
+      }
+      // Fallback to Gemini
+      if (this.keyPool.length > 0) {
+        return this.callGeminiPool<T>(prompt, retries);
+      }
+    } else {
+      // 1. Gemini as Primary for Arabic Localization & Cultural Synopses
+      if (this.keyPool.length > 0) {
+        const geminiRes = await this.callGeminiPool<T>(prompt, retries);
+        if (geminiRes) return geminiRes;
+        console.warn('[AI_GATEWAY] ⚠️ Gemini Primary returned null or in cooldown. Falling back to Groq Llama 3.3 70B...');
+      }
+      // Fallback to Groq
+      if (this.groqKeyPool.length > 0) {
+        return this.callGroqOpenSource<T>(prompt);
+      }
     }
 
     return null;
@@ -496,7 +515,8 @@ Respond ONLY in valid JSON conforming to this schema:
   "vibe_badges": ["string"]
 }`;
 
-    return await this.generateJson<AiEnrichmentResult>(prompt);
+    // Gemini Primary for Arabic Cultural Localization, Groq as High-Speed Fallback
+    return await this.generateJson<AiEnrichmentResult>(prompt, { preference: 'gemini' });
   }
 
   /// Returns full health metrics of the Gemini pool
@@ -916,7 +936,7 @@ Respond ONLY in valid JSON matching this schema:
       }>;
       arabic_refinements: Record<string, string>;
       curated_shelf_order: string[];
-    }>(prompt);
+    }>(prompt, { preference: 'groq' });
 
     let allCandidateMap = new Map<string, any>();
 
