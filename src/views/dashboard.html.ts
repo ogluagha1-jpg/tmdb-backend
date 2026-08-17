@@ -850,6 +850,66 @@ export function renderDashboardHtml(): string {
         </table>
       </div>
     </div>
+
+    <!-- 🎬 AI ENRICHED MOVIES & QUALITY INSPECTION HUB 🎬 -->
+    <div class="card" style="margin-top: 24px; border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.05));">
+      <div class="card-title-row" style="flex-wrap: wrap; gap: 12px; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🎬</div>
+          <div>
+            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+              AI Enriched Movies & Quality Inspection Hub
+              <span id="enriched-total-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
+                Loading...
+              </span>
+            </h2>
+            <p class="card-desc">Inspect all titles enriched by Groq & Gemini with populated Arabic translations, studios, and micro-genres</p>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <!-- Filter Engine Pills -->
+          <div style="display: flex; background: rgba(0,0,0,0.3); padding: 3px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+            <button id="filter-engine-all" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; background: rgba(255,255,255,0.15); font-weight: 700;" onclick="filterEnrichedEngine('all')">🌟 All</button>
+            <button id="filter-engine-groq" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; color: #10B981;" onclick="filterEnrichedEngine('groq')">🦙 Groq</button>
+            <button id="filter-engine-google" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; color: #60A5FA;" onclick="filterEnrichedEngine('google')">🤖 Gemini</button>
+          </div>
+
+          <!-- Live Search Box -->
+          <input type="text" id="enriched-search-input" placeholder="🔍 Search title or arabic..." style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; width: 210px;" oninput="debounceEnrichedSearch(this.value)">
+
+          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="loadEnrichedMovies()">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <!-- Enriched Movies Grid Container -->
+      <div id="enriched-movies-container" style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 14px;">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <!-- Pagination Footer -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 10px;">
+        <span id="enriched-pagination-info" style="font-size: 12px; color: var(--text-muted);">Showing 0-0 of 0 movies</span>
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-enriched-prev" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(-1)" disabled>◀️ Previous</button>
+          <button id="btn-enriched-next" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(1)">Next ▶️</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw JSON Metadata Inspector Modal -->
+  <div id="json-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 650px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h2 class="modal-title" id="json-modal-title">🔍 Metadata Inspector</h2>
+        <button style="background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;" onclick="closeJsonModal()">&times;</button>
+      </div>
+      <pre id="json-modal-content" style="background: rgba(0,0,0,0.6); padding: 14px; border-radius: 10px; font-family: monospace; font-size: 12px; color: #38BDF8; max-height: 420px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; border: 1px solid var(--border-subtle);"></pre>
+      <div style="margin-top: 14px; text-align: right;">
+        <button class="btn btn-secondary" onclick="closeJsonModal()">Close</button>
+      </div>
+    </div>
   </div>
 
   <!-- Real-Time Category Creation Modal -->
@@ -1385,6 +1445,172 @@ export function renderDashboardHtml(): string {
       }
     };
 
+    // ── AI Enriched Movies Inspector State & Functions ──
+    let enrichedCurrentEngine = 'all';
+    let enrichedCurrentSearch = '';
+    let enrichedCurrentOffset = 0;
+    const enrichedLimit = 24;
+    let enrichedLoadedData = [];
+
+    window.filterEnrichedEngine = function(engine) {
+      enrichedCurrentEngine = engine;
+      enrichedCurrentOffset = 0;
+      
+      const bAll = document.getElementById('filter-engine-all');
+      const bGroq = document.getElementById('filter-engine-groq');
+      const bGoogle = document.getElementById('filter-engine-google');
+      if (bAll) bAll.style.background = engine === 'all' ? 'rgba(255,255,255,0.15)' : 'transparent';
+      if (bGroq) bGroq.style.background = engine === 'groq' ? 'rgba(16,185,129,0.2)' : 'transparent';
+      if (bGoogle) bGoogle.style.background = engine === 'google' ? 'rgba(96,165,250,0.2)' : 'transparent';
+      
+      window.loadEnrichedMovies();
+    };
+
+    let searchTimer = null;
+    window.debounceEnrichedSearch = function(val) {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        enrichedCurrentSearch = val.trim();
+        enrichedCurrentOffset = 0;
+        window.loadEnrichedMovies();
+      }, 350);
+    };
+
+    window.changeEnrichedPage = function(delta) {
+      enrichedCurrentOffset = Math.max(0, enrichedCurrentOffset + (delta * enrichedLimit));
+      window.loadEnrichedMovies();
+    };
+
+    window.loadEnrichedMovies = async function() {
+      const container = document.getElementById('enriched-movies-container');
+      const badge = document.getElementById('enriched-total-badge');
+      const info = document.getElementById('enriched-pagination-info');
+      const btnPrev = document.getElementById('btn-enriched-prev');
+      const btnNext = document.getElementById('btn-enriched-next');
+
+      if (!container) return;
+
+      try {
+        const url = `/api/ai/enriched-movies?engine=${encodeURIComponent(enrichedCurrentEngine)}&search=${encodeURIComponent(enrichedCurrentSearch)}&limit=${enrichedLimit}&offset=${enrichedCurrentOffset}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success) {
+          container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--text-muted);">Failed to load movies: ${data.error}</div>`;
+          return;
+        }
+
+        enrichedLoadedData = data.movies || [];
+        const total = data.total || 0;
+        if (badge) badge.innerText = `${total.toLocaleString()} Enriched Titles`;
+
+        if (info) {
+          const from = total === 0 ? 0 : enrichedCurrentOffset + 1;
+          const to = Math.min(enrichedCurrentOffset + enrichedLoadedData.length, total);
+          info.innerText = `Showing ${from}-${to} of ${total.toLocaleString()} enriched movies`;
+        }
+
+        if (btnPrev) btnPrev.disabled = enrichedCurrentOffset === 0;
+        if (btnNext) btnNext.disabled = enrichedCurrentOffset + enrichedLoadedData.length >= total;
+
+        if (enrichedLoadedData.length === 0) {
+          container.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 40px 20px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px dashed var(--border-subtle);">
+              <div style="font-size: 32px; margin-bottom: 8px;">🎬</div>
+              <h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary);">No enriched movies found matching criteria</h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Launch the AI Gap-Scan or click "Test AI Enrichment" to populate movie metadata.</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = enrichedLoadedData.map((m, idx) => {
+          const isGroq = (m.ai_model || '').toLowerCase().includes('groq');
+          const isGoogle = (m.ai_model || '').toLowerCase().includes('google') || (m.ai_model || '').toLowerCase().includes('gemini');
+          
+          const modelBadge = isGroq
+            ? `<span style="background: rgba(16,185,129,0.18); color: #10B981; border: 1px solid rgba(16,185,129,0.35); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;">🦙 ${m.ai_model}</span>`
+            : isGoogle
+            ? `<span style="background: rgba(59,130,246,0.18); color: #60A5FA; border: 1px solid rgba(59,130,246,0.35); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;">🤖 ${m.ai_model}</span>`
+            : `<span style="background: rgba(255,255,255,0.08); color: var(--text-secondary); font-size: 10px; padding: 2px 6px; border-radius: 6px;">✨ AI Enriched</span>`;
+
+          const posterSrc = m.poster_path ? `https://image.tmdb.org/t/p/w185${m.poster_path}` : 'https://placehold.co/185x278/161b22/94a3b8?text=No+Poster';
+
+          const studios = Array.isArray(m.studios_json) ? m.studios_json.slice(0, 3) : [];
+          const studioBadges = studios.map(s => `
+            <span style="background: rgba(99,102,241,0.15); color: #A5B4FC; border: 1px solid rgba(99,102,241,0.25); font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; display: inline-block;">
+              🏢 ${s.name || s}
+            </span>
+          `).join('');
+
+          const keywords = Array.isArray(m.keywords_json) ? m.keywords_json.slice(0, 4) : [];
+          const keywordBadges = keywords.map(k => `
+            <span style="background: rgba(255,255,255,0.05); color: #CBD5E1; border: 1px solid rgba(255,255,255,0.08); font-size: 10px; padding: 2px 6px; border-radius: 4px; display: inline-block;">
+              🏷️ ${k.name || k}
+            </span>
+          `).join('');
+
+          return `
+            <div style="background: rgba(22,27,34,0.9); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s ease; position: relative;">
+              <div>
+                <!-- Top Row: Poster + English Title + Model -->
+                <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                  <img src="${posterSrc}" alt="${m.title}" style="width: 54px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #0B0E14; border: 1px solid rgba(255,255,255,0.06);">
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 4px;">
+                      <h4 style="font-size: 13px; font-weight: 800; color: white; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${m.title}</h4>
+                      <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">${m.year || ''}</span>
+                    </div>
+                    <div style="margin-bottom: 6px;">
+                      ${modelBadge}
+                    </div>
+                    <div style="font-size: 10px; color: var(--text-muted);">ID: #${m.id} • Pop: ${Math.round(m.popularity || 0)}</div>
+                  </div>
+                </div>
+
+                <!-- Arabic Localization Card -->
+                <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase;">🇸🇦 Arabic Localization</span>
+                    <strong style="font-size: 12px; color: white; direction: rtl;">${m.title_ar || 'غير مترجم'}</strong>
+                  </div>
+                  ${m.tagline_ar ? `<div style="font-size: 11px; color: #F59E0B; font-style: italic; direction: rtl; margin-bottom: 4px; padding: 3px 6px; background: rgba(245,158,11,0.08); border-radius: 4px;">"${m.tagline_ar}"</div>` : ''}
+                  <p style="font-size: 11px; color: var(--text-secondary); direction: rtl; line-height: 1.4; max-height: 60px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
+                    ${m.overview_ar || 'لا يوجد وصف عربي متاح.'}
+                  </p>
+                </div>
+
+                <!-- Studios & Micro-Genres -->
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
+                  ${studios.length > 0 ? `<div style="display: flex; flex-wrap: wrap; gap: 4px;">${studioBadges}</div>` : ''}
+                  ${keywords.length > 0 ? `<div style="display: flex; flex-wrap: wrap; gap: 4px;">${keywordBadges}</div>` : ''}
+                </div>
+              </div>
+
+              <!-- Action Bar -->
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05);">
+                <span style="font-size: 10px; color: var(--text-muted);">Enriched: ${m.enriched_at ? new Date(m.enriched_at).toLocaleTimeString() : 'Recently'}</span>
+                <button class="btn btn-secondary" style="padding: 3px 8px; font-size: 10px;" onclick="inspectMovieJson(${idx})">🔍 View Raw JSON</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #EF4444;">Error fetching enriched movies: ${err.message}</div>`;
+      }
+    };
+
+    window.inspectMovieJson = function(idx) {
+      const movie = enrichedLoadedData[idx];
+      if (!movie) return;
+      document.getElementById('json-modal-title').innerText = `🔍 #${movie.id} - ${movie.title}`;
+      document.getElementById('json-modal-content').innerText = JSON.stringify(movie, null, 2);
+      document.getElementById('json-modal').classList.add('active');
+    };
+
+    window.closeJsonModal = function() {
+      document.getElementById('json-modal').classList.remove('active');
+    };
+
     // Global aliases
     window.fetchMetrics = window.fetchMetrics;
     window.fetchScannerStatus = window.fetchScannerStatus;
@@ -1418,12 +1644,20 @@ export function renderDashboardHtml(): string {
     var closeCreateModal = window.closeCreateModal;
     var applyPreset = window.applyPreset;
     var submitCreateCategory = window.submitCreateCategory;
+    var filterEnrichedEngine = window.filterEnrichedEngine;
+    var debounceEnrichedSearch = window.debounceEnrichedSearch;
+    var changeEnrichedPage = window.changeEnrichedPage;
+    var loadEnrichedMovies = window.loadEnrichedMovies;
+    var inspectMovieJson = window.inspectMovieJson;
+    var closeJsonModal = window.closeJsonModal;
 
     // Initial load + auto-refresh
     window.fetchMetrics();
     window.fetchScannerStatus();
+    window.loadEnrichedMovies();
     setInterval(window.fetchMetrics, 10000);
     setInterval(window.fetchScannerStatus, 4000);
+    setInterval(window.loadEnrichedMovies, 12000);
   </script>
 </body>
 </html>`;

@@ -347,6 +347,48 @@ app.post('/api/ai/categories/discover', async (_req: Request, res: Response) => 
   }
 });
 
+// 23. Fetch Already Enriched / Processed Movies with Full Metadata Preview (Groq & Gemini)
+app.get('/api/ai/enriched-movies', async (req: Request, res: Response) => {
+  try {
+    const supabase = SupabaseService.getClient();
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
+    const offset = parseInt(req.query.offset as string, 10) || 0;
+    const engine = (req.query.engine as string || 'all').toLowerCase();
+    const search = (req.query.search as string || '').trim();
+
+    let query = supabase
+      .from('movies')
+      .select('id, title, tmdb_id, poster_path, year, release_date, popularity, title_ar, overview_ar, tagline_ar, studios_json, keywords_json, ai_model, enriched_at, updated_at', { count: 'exact' })
+      .not('title_ar', 'is', null)
+      .not('overview_ar', 'is', null)
+      .order('enriched_at', { ascending: false, nullsFirst: false });
+
+    if (engine === 'groq') {
+      query = query.ilike('ai_model', 'groq/%');
+    } else if (engine === 'google' || engine === 'gemini') {
+      query = query.ilike('ai_model', 'google/%');
+    }
+
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,title_ar.ilike.%${search}%`);
+    }
+
+    const { data: movies, count, error } = await query.range(offset, offset + limit - 1);
+    if (error) throw error;
+
+    res.status(200).json({
+      success: true,
+      count: movies?.length || 0,
+      total: count || 0,
+      offset,
+      limit,
+      movies: movies || [],
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 const server = app.listen(port, () => {
