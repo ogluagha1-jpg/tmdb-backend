@@ -1555,7 +1555,7 @@ export function renderDashboardHtml(): string {
                     '<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 4px;">' +
                       '<h4 style="font-size: 13px; font-weight: 800; color: white; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + (m.title || 'Untitled') + '</h4>' +
                       '<span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">' + (m.year || '') + '</span>' +
-                    </div>' +
+                    '</div>' +
                     '<div style="margin-bottom: 6px;">' + modelBadge + '</div>' +
                     '<div style="font-size: 10px; color: var(--text-muted);">ID: #' + m.id + ' • Pop: ' + Math.round(m.popularity || 0) + '</div>' +
                   '</div>' +
