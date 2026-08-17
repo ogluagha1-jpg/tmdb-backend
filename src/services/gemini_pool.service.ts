@@ -73,8 +73,6 @@ export class GeminiPoolService {
   // Candidate models in fallback order
   private candidateModels = [
     process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-3.1-flash-lite',
   ];
 
   private constructor() {
