@@ -96,13 +96,15 @@ export class GeminiPoolService {
   }
 
   private initializePool(): void {
-    const envKeys = process.env.GEMINI_API_KEYS
-      ? process.env.GEMINI_API_KEYS.split(',').map((k) => k.trim()).filter((k) => k.length > 10)
-      : [];
+    const raw = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').trim();
 
-    const customSingle = process.env.GEMINI_API_KEY ? [process.env.GEMINI_API_KEY.trim()] : [];
+    // Support comma-separated, newline-separated, semicolon-separated, and strip any quotes/spaces
+    const envKeys = raw
+      .split(/[\r\n,;]+/)
+      .map((k) => k.replace(/['" \t]/g, '').trim())
+      .filter((k) => k.length > 10 && !k.startsWith('#'));
 
-    const activeKeys = Array.from(new Set([...envKeys, ...customSingle])).filter((k) => k.length > 10);
+    const activeKeys = Array.from(new Set(envKeys));
     this.keyPool = activeKeys;
 
     for (const k of this.keyPool) {
