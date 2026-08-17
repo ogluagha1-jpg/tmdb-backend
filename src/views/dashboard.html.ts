@@ -4,14 +4,14 @@ export function renderDashboardHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Teraflix Engine | Server Health & Live Metrics Hub</title>
+  <title>Teraflix Engine | Server Operations & Catalogue Explorer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-base: #0B0E14;
-      --bg-card: rgba(22, 27, 34, 0.85);
+      --bg-card: rgba(22, 27, 34, 0.88);
       --bg-card-hover: rgba(30, 37, 48, 0.95);
       --border-subtle: rgba(255, 255, 255, 0.08);
       --border-glow: rgba(229, 9, 20, 0.35);
@@ -51,20 +51,21 @@ export function renderDashboardHtml(): string {
     }
 
     .container {
-      max-width: 1380px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 20px 16px;
     }
 
-    /* Top Navigation Bar */
+    /* Top Header */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: 20px;
+      padding-bottom: 18px;
       border-bottom: 1px solid var(--border-subtle);
-      margin-bottom: 20px;
+      margin-bottom: 18px;
       gap: 16px;
+      flex-wrap: wrap;
     }
 
     .brand-group {
@@ -134,6 +135,92 @@ export function renderDashboardHtml(): string {
       50% { opacity: 0.4; transform: scale(0.85); }
     }
 
+    /* ── 2-Tab Navigation Bar ── */
+    .tabs-nav-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 22px;
+      background: rgba(15, 19, 26, 0.85);
+      padding: 6px;
+      border-radius: 16px;
+      border: 1px solid var(--border-subtle);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: inherit;
+      text-align: left;
+      user-select: none;
+    }
+
+    .tab-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-secondary);
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(229, 9, 20, 0.16), rgba(99, 102, 241, 0.14));
+      border-color: rgba(229, 9, 20, 0.35);
+      color: var(--text-primary);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .tab-icon {
+      font-size: 22px;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+    }
+
+    .tab-title {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: -0.2px;
+      line-height: 1.2;
+    }
+
+    .tab-btn.active .tab-title {
+      color: #FFFFFF;
+    }
+
+    .tab-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-weight: 500;
+    }
+
+    .tab-btn.active .tab-sub {
+      color: rgba(255, 255, 255, 0.75);
+    }
+
+    .tab-content {
+      animation: tabFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes tabFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
@@ -298,21 +385,19 @@ export function renderDashboardHtml(): string {
     }
 
     .studio-count-badge {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.06);
       padding: 3px 8px;
-      border-radius: 12px;
-      font-family: 'Outfit', sans-serif;
+      border-radius: 6px;
       font-size: 12px;
       font-weight: 700;
-      flex-shrink: 0;
     }
 
-    /* Category Table */
+    /* Table Styles */
     .table-container {
       overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      max-height: 480px;
-      border-radius: 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      margin-top: 10px;
     }
 
     table {
@@ -320,18 +405,17 @@ export function renderDashboardHtml(): string {
       border-collapse: collapse;
       font-size: 12px;
       text-align: left;
-      min-width: 620px;
     }
 
     th {
-      background: rgba(22, 27, 34, 0.95);
-      color: var(--text-muted);
-      font-weight: 600;
+      background: rgba(255, 255, 255, 0.04);
       padding: 10px 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
       border-bottom: 1px solid var(--border-subtle);
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.5px;
     }
 
     td {
@@ -340,34 +424,36 @@ export function renderDashboardHtml(): string {
       color: var(--text-secondary);
     }
 
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-primary);
+    }
+
     .pill-published {
-      background: rgba(16, 185, 129, 0.12);
-      color: var(--emerald);
-      border: 1px solid rgba(16, 185, 129, 0.25);
-      padding: 2px 7px;
-      border-radius: 5px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10B981;
+      padding: 2px 6px;
+      border-radius: 4px;
       font-size: 10px;
-      font-weight: 600;
-      white-space: nowrap;
+      font-weight: 700;
+      border: 1px solid rgba(16, 185, 129, 0.25);
     }
 
     .btn-delete {
       background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
       color: #EF4444;
-      border: 1px solid rgba(239, 68, 68, 0.25);
       padding: 4px 8px;
       border-radius: 6px;
       font-size: 11px;
       cursor: pointer;
-      transition: all 0.15s ease;
     }
 
     .btn-delete:hover {
-      background: rgba(239, 68, 68, 0.25);
-      color: white;
+      background: rgba(239, 68, 68, 0.2);
     }
 
-    /* Modal Dialog */
+    /* Modal Overlay */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -380,11 +466,11 @@ export function renderDashboardHtml(): string {
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 16px;
       z-index: 200;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
-      padding: 16px;
     }
 
     .modal-overlay.active {
@@ -393,12 +479,12 @@ export function renderDashboardHtml(): string {
     }
 
     .modal-card {
-      background: #161B22;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: #121720;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 16px;
+      padding: 20px;
       width: 100%;
-      max-width: 520px;
-      padding: 24px;
+      max-width: 500px;
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
       transform: scale(0.95);
       transition: transform 0.2s ease;
@@ -409,119 +495,37 @@ export function renderDashboardHtml(): string {
     }
 
     .modal-title {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 800;
       margin-bottom: 4px;
     }
 
     .form-group {
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
 
     .form-label {
       display: block;
       font-size: 11px;
       font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin-bottom: 6px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
     }
 
     .form-input, .form-select {
       width: 100%;
+      padding: 8px 12px;
       background: rgba(0, 0, 0, 0.4);
       border: 1px solid var(--border-subtle);
       border-radius: 8px;
-      padding: 10px 12px;
       color: white;
-      font-size: 13px;
+      font-size: 12px;
       font-family: inherit;
-      outline: none;
-      transition: border-color 0.15s ease;
     }
 
     .form-input:focus, .form-select:focus {
-      border-color: var(--crimson);
-    }
-
-    /* Mobile Responsive Optimizations */
-    @media (max-width: 900px) {
-      .grid-4 {
-        grid-template-columns: 1fr 1fr;
-      }
-      .grid-2 {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .container {
-        padding: 14px 10px;
-      }
-
-      header {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-      }
-
-      .brand-group {
-        justify-content: space-between;
-      }
-
-      .header-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-      }
-
-      .header-actions .status-badge {
-        grid-column: span 2;
-        justify-content: center;
-      }
-
-      .btn {
-        width: 100%;
-        padding: 10px 12px;
-        font-size: 12px;
-      }
-
-      .grid-4 {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-      }
-
-      .card {
-        padding: 12px;
-        border-radius: 12px;
-      }
-
-      .card-value {
-        font-size: 22px;
-      }
-
-      .studios-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-      }
-
-      .studio-pill {
-        padding: 8px 10px;
-      }
-
-      .studio-name {
-        font-size: 11px;
-      }
-
-      .studio-name-ar {
-        font-size: 9px;
-      }
-
-      .studio-count-badge {
-        font-size: 11px;
-        padding: 2px 6px;
-      }
+      outline: none;
+      border-color: var(--indigo);
     }
 
     /* Toast Notification */
@@ -531,7 +535,7 @@ export function renderDashboardHtml(): string {
       left: 16px;
       right: 16px;
       margin: 0 auto;
-      max-width: 400px;
+      max-width: 420px;
       padding: 12px 18px;
       background: #1E293B;
       color: white;
@@ -552,18 +556,30 @@ export function renderDashboardHtml(): string {
       opacity: 1;
       transform: translateY(0);
     }
+
+    @media (max-width: 768px) {
+      .grid-4 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+      .tabs-nav-bar {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Header -->
+    <!-- Top Header -->
     <header>
       <div class="brand-group">
         <div style="display:flex; align-items:center; gap:10px;">
           <div class="brand-logo">TERAFLIX</div>
           <div>
-            <h1 class="brand-title">Metrics Engine</h1>
-            <p class="brand-subtitle">TMDB Backend Health & Discovery</p>
+            <h1 class="brand-title">Control Hub & Metadata Engine</h1>
+            <p class="brand-subtitle">High-Performance Backend & Live Discovery</p>
           </div>
         </div>
       </div>
@@ -574,325 +590,379 @@ export function renderDashboardHtml(): string {
         </div>
         <button class="btn btn-emerald" onclick="openCreateModal()">➕ Create Shelf</button>
         <button class="btn btn-secondary" onclick="fetchMetrics()">🔄 Refresh</button>
-        <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">📁 Auto-Scan</button>
       </div>
     </header>
 
-    <!-- ⚡ 24/7 AUTO-SCANNER & BATCH CONTROLS ⚡ -->
-    <div class="card" style="margin-bottom: 20px; border-color: rgba(229, 9, 20, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(229, 9, 20, 0.08));">
-      <div class="card-title-row" style="flex-wrap: wrap; gap: 10px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div class="card-icon" style="background: rgba(229, 9, 20, 0.2); color: #E50914; font-size: 20px;">⚡</div>
-          <div>
-            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-              Multi-Source 24/7 Auto-Scanner & Batch Engine
-              <span id="scanner-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(16, 185, 129, 0.15); color: #10B981; border-color: rgba(16, 185, 129, 0.3);">
-                🟢 Active (24/7)
-              </span>
-            </h2>
-            <p class="card-desc" id="scanner-subtitle">Continuous background enrichment across TMDB, OMDb, Cinemeta & Wikipedia</p>
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button id="btn-toggle-scan" class="btn btn-secondary" onclick="toggleAutoScanner()" style="font-weight: 700;">⏸️ Pause Auto-Scan</button>
-          <button class="btn btn-primary" onclick="triggerBatchScan(500)" style="font-weight: 700;">⚡ Scan Next 500 Batch</button>
-          <button class="btn btn-secondary" onclick="triggerResetAndRescan()" style="border-color: rgba(229, 9, 20, 0.6); color: #FF9999; font-weight: 700; background: rgba(229, 9, 20, 0.1);">🔄 Rescan All From Scratch</button>
-          <button class="btn btn-secondary" onclick="triggerMultiSourceSync()">🌐 Knowledge Graph Sync</button>
-          <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">📁 Regenerate Shelves</button>
-        </div>
-      </div>
-
-      <!-- Live Auto-Scanner Progress Bar -->
-      <div style="margin-top: 14px;">
-        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
-          <span><strong>Overall Catalogue Enrichment Progress:</strong></span>
-          <strong id="scanner-progress-label">-- / -- (0%)</strong>
-        </div>
-        <div class="progress-track" style="height: 10px; border-radius: 6px; background: rgba(255,255,255,0.06);">
-          <div id="scanner-progress-fill" class="progress-fill" style="width: 0%; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #E50914, #F59E0B, #10B981); transition: width 0.4s ease;"></div>
-        </div>
-        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-          <span>🎯 Currently Processing: <strong id="scanner-current-movie" style="color: white;">--</strong></span>
-          <span>Processed This Session: <strong id="scanner-session-count" style="color: #10B981;">--</strong> titles</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Top 4 Summary Metrics (2x2 on phones, 4x1 on desktop) -->
-    <div class="grid-4">
-      <div class="card">
-        <div class="card-title-row">
-          <span class="card-label">Catalogue</span>
-          <div class="card-icon" style="background: rgba(229, 9, 20, 0.15); color: #E50914;">🎬</div>
-        </div>
-        <div class="card-value" id="val-total-movies">--</div>
-        <div class="card-desc">Total active movies</div>
-      </div>
-
-      <div class="card">
-        <div class="card-title-row">
-          <span class="card-label">Arabic</span>
-          <div class="card-icon" style="background: rgba(16, 185, 129, 0.15); color: #10B981;">🌐</div>
-        </div>
-        <div class="card-value" id="val-arabic-total">--</div>
-        <div class="progress-track">
-          <div id="prog-arabic" class="progress-fill" style="width: 0%; background: linear-gradient(90deg, #10B981, #059669);"></div>
-        </div>
-        <div class="card-desc" id="val-arabic-pct">--% Translated</div>
-      </div>
-
-      <div class="card">
-        <div class="card-title-row">
-          <span class="card-label">Studios</span>
-          <div class="card-icon" style="background: rgba(99, 102, 241, 0.15); color: #6366F1;">🏢</div>
-        </div>
-        <div class="card-value" id="val-studios-enriched">--</div>
-        <div class="card-desc">With company tags</div>
-      </div>
-
-      <div class="card">
-        <div class="card-title-row">
-          <span class="card-label">Uptime</span>
-          <div class="card-icon" style="background: rgba(6, 182, 212, 0.15); color: #06B6D4;">⏱️</div>
-        </div>
-        <div class="card-value" id="val-uptime" style="font-size: 20px;">--</div>
-        <div class="card-desc" id="val-memory">Memory: -- MB</div>
-      </div>
-    </div>
-
-    <!-- Translation Breakdown & Recent Releases -->
-    <div class="grid-2">
-      <!-- Arabic Detailed Breakdown -->
-      <div class="card">
-        <div class="card-title-row">
-          <h2 style="font-size: 14px; font-weight: 700;">Arabic Translation Coverage</h2>
-          <span class="card-label" id="val-arabic-unique-label">--</span>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px;">
-          <div>
-            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-              <span>Official Titles (<code>title_ar</code>)</span>
-              <strong id="val-title-ar">--</strong>
-            </div>
-            <div class="progress-track">
-              <div id="prog-title-ar" class="progress-fill" style="width: 0%; background: #6366F1;"></div>
-            </div>
-          </div>
-
-          <div>
-            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-              <span>Overviews (<code>overview_ar</code>)</span>
-              <strong id="val-overview-ar">--</strong>
-            </div>
-            <div class="progress-track">
-              <div id="prog-overview-ar" class="progress-fill" style="width: 0%; background: #10B981;"></div>
-            </div>
-          </div>
-
-          <div>
-            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-              <span>Taglines (<code>tagline_ar</code>)</span>
-              <strong id="val-tagline-ar">--</strong>
-            </div>
-            <div class="progress-track">
-              <div id="prog-tagline-ar" class="progress-fill" style="width: 0%; background: #F59E0B;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Recent Years Breakdown -->
-      <div class="card">
-        <div class="card-title-row">
-          <h2 style="font-size: 14px; font-weight: 700;">Recent Releases Translated</h2>
-          <span class="card-label">By Year</span>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px;">
-          <div>
-            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-              <span>🔥 <strong>2026 Releases</strong> (Brand New)</span>
-              <strong id="val-y2026">--</strong>
-            </div>
-            <div class="progress-track">
-              <div id="prog-y2026" class="progress-fill" style="width: 0%; background: #E50914;"></div>
-            </div>
-          </div>
-
-          <div>
-            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-              <span>⭐ <strong>2025 Releases</strong></span>
-              <strong id="val-y2025">--</strong>
-            </div>
-            <div class="progress-track">
-              <div id="prog-y2025" class="progress-fill" style="width: 0%; background: #3B82F6;"></div>
-            </div>
-          </div>
-
-          <div>
-            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-              <span>✨ <strong>Modern Era</strong> (2020 – 2026)</span>
-              <strong id="val-modern">--</strong>
-            </div>
-            <div class="progress-track">
-              <div id="prog-modern" class="progress-fill" style="width: 0%; background: #8B5CF6;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 🤖 GEMINI COOPERATIVE AI & GAP-SCANNER CONTROL HUB 🤖 -->
-    <div class="card" style="margin-bottom: 20px; border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.08));">
-      <div class="card-title-row" style="flex-wrap: wrap; gap: 10px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🤖</div>
-          <div>
-            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              Gemini & Groq AI Cooperative Hub
-              <span id="ai-runtime-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(245, 158, 11, 0.15); color: #F59E0B; border-color: rgba(245, 158, 11, 0.3);">
-                ⏸️ Runtime AI: Controlled
-              </span>
-              <span id="ai-pool-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
-                Keys Active
-              </span>
-              <span id="groq-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(16, 185, 129, 0.15); color: #10B981; border-color: rgba(16, 185, 129, 0.3);">
-                🦙 Groq Fallback: Ready
-              </span>
-            </h2>
-            <p class="card-desc">Cooperatively enriches movie metadata with Arabic localization, studio tags, and micro-genres with automatic Groq open-source failover</p>
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button id="btn-toggle-ai" class="btn" onclick="window.toggleAiRuntime()" style="background: rgba(255, 255, 255, 0.08); font-size: 12px; font-weight: 600;">
-            🎛️ Toggle Runtime AI
-          </button>
-          <button id="btn-gap-scan" class="btn btn-primary" onclick="window.triggerCooperativeGapScan()" style="background: linear-gradient(135deg, #6366F1, #4F46E5); font-weight: 700;">
-            🚀 Launch Cooperative AI Gap-Scan
-          </button>
-          <button id="btn-discover-cats" class="btn" onclick="window.triggerAiCategoryDiscovery()" style="background: linear-gradient(135deg, #10B981, #059669); font-weight: 700; color: white;">
-            ✨ AI Discover & Dynamic Shelves
-          </button>
-          <button class="btn" onclick="window.triggerAiTest()" style="background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); font-weight: 600;">
-            ⚡ Test Key
-          </button>
-        </div>
-      </div>
-
-      <!-- Live Cooperative AI Gap-Scan Progress Box -->
-      <div id="ai-gap-progress-box" style="margin-top: 14px; padding: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(99, 102, 241, 0.25);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px;">
-          <span style="font-weight: 700; color: #818CF8;">🎯 Cooperative AI Gap-Scanner Progress:</span>
-          <span id="ai-gap-progress-label" style="font-weight: 700; color: white;">0 / 0 (0%)</span>
-        </div>
-        <div class="progress-track" style="height: 8px; border-radius: 4px; background: rgba(255,255,255,0.06);">
-          <div id="ai-gap-progress-fill" class="progress-fill" style="width: 0%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #6366F1, #818CF8, #10B981); transition: width 0.3s ease;"></div>
-        </div>
-        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-          <span>Processing: <strong id="ai-gap-current-title" style="color: white;">Idle (Ready on demand)</strong></span>
-          <span>Enriched: <strong id="ai-gap-enriched-count" style="color: #10B981;">0</strong> | Failed: <strong id="ai-gap-failed-count" style="color: #EF4444;">0</strong></span>
-        </div>
-      </div>
-
-      <!-- 16 Key Grid -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 14px;" id="ai-keys-container">
-        <!-- Injected via JavaScript -->
-      </div>
-    </div>
-
-    <!-- Major Studios Breakdown Grid -->
-    <div class="card" style="margin-bottom: 20px;">
-      <div class="card-title-row">
+    <!-- ── 2-Tab Navigation Bar ── -->
+    <div class="tabs-nav-bar">
+      <button id="tab-btn-operations" class="tab-btn active" onclick="switchTab('operations')">
+        <span class="tab-icon">⚙️</span>
         <div>
-          <h2 style="font-size: 15px; font-weight: 800;">Studio Hub Live Counters</h2>
-          <p class="card-desc">Titles accessible via Studio Hub watermark cards</p>
+          <div class="tab-title">Server Operations & Live Engine</div>
+          <div class="tab-sub">24/7 Scanner, Dual-AI Gap-Scan & Key Pools</div>
         </div>
-      </div>
-      <div class="studios-grid" id="studios-container">
-        <!-- Injected via JavaScript -->
-      </div>
-    </div>
-
-    <!-- Active Home Categories Table -->
-    <div class="card">
-      <div class="card-title-row" style="flex-wrap: wrap; gap: 8px;">
+      </button>
+      <button id="tab-btn-catalogue" class="tab-btn" onclick="switchTab('catalogue')">
+        <span class="tab-icon">🎬</span>
         <div>
-          <h2 style="font-size: 15px; font-weight: 800;">Active Published Home Categories</h2>
-          <p class="card-desc">Dynamic shelves active on mobile app</p>
+          <div class="tab-title">Metadata & Catalogue Explorer</div>
+          <div class="tab-sub">Enriched Titles, Arabic Coverage & Home Shelves</div>
         </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <button class="btn" onclick="window.triggerAiCategoryDiscovery()" style="background: linear-gradient(135deg, #10B981, #059669); font-size: 12px; font-weight: 700; color: white;">
-            ✨ AI Discover New Shelves
-          </button>
-          <div id="categories-count-badge" class="status-badge" style="background: rgba(99, 102, 241, 0.12); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
-            -- Published Shelves
+      </button>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- TAB 1: ⚙️ SERVER OPERATIONS & LIVE PROCESSES             -->
+    <!-- ========================================================= -->
+    <div id="tab-content-operations" class="tab-content">
+      <!-- ⚡ 24/7 AUTO-SCANNER & BATCH CONTROLS ⚡ -->
+      <div class="card" style="margin-bottom: 20px; border-color: rgba(229, 9, 20, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(229, 9, 20, 0.08));">
+        <div class="card-title-row" style="flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="card-icon" style="background: rgba(229, 9, 20, 0.2); color: #E50914; font-size: 20px;">⚡</div>
+            <div>
+              <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                Multi-Source 24/7 Auto-Scanner & Batch Engine
+                <span id="scanner-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(16, 185, 129, 0.15); color: #10B981; border-color: rgba(16, 185, 129, 0.3);">
+                  🟢 Active (24/7)
+                </span>
+              </h2>
+              <p class="card-desc" id="scanner-subtitle">Continuous background enrichment across TMDB, OMDb, Cinemeta & Wikipedia</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button id="btn-toggle-scan" class="btn btn-secondary" onclick="toggleAutoScanner()" style="font-weight: 700;">⏸️ Pause Auto-Scan</button>
+            <button class="btn btn-primary" onclick="triggerBatchScan(500)" style="font-weight: 700;">⚡ Scan Next 500 Batch</button>
+            <button class="btn btn-secondary" onclick="triggerResetAndRescan()" style="border-color: rgba(229, 9, 20, 0.6); color: #FF9999; font-weight: 700; background: rgba(229, 9, 20, 0.1);">🔄 Rescan All From Scratch</button>
+            <button class="btn btn-secondary" onclick="triggerMultiSourceSync()">🌐 Knowledge Graph Sync</button>
+            <button class="btn btn-secondary" onclick="triggerRegenerateCategories()">📁 Regenerate Shelves</button>
+          </div>
+        </div>
+
+        <!-- Live Auto-Scanner Progress Bar -->
+        <div style="margin-top: 14px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+            <span><strong>Overall Catalogue Enrichment Progress:</strong></span>
+            <strong id="scanner-progress-label">-- / -- (0%)</strong>
+          </div>
+          <div class="progress-track" style="height: 10px; border-radius: 6px; background: rgba(255,255,255,0.06);">
+            <div id="scanner-progress-fill" class="progress-fill" style="width: 0%; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #E50914, #F59E0B, #10B981); transition: width 0.4s ease;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+            <span>🎯 Currently Processing: <strong id="scanner-current-movie" style="color: white;">--</strong></span>
+            <span>Processed This Session: <strong id="scanner-session-count" style="color: #10B981;">--</strong> titles</span>
           </div>
         </div>
       </div>
-      <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px; display:flex; align-items:center; gap:4px;">
-        <span>👈 Scroll horizontally to see Arabic & details 👉</span>
+
+      <!-- 🤖 GEMINI & GROQ AI COOPERATIVE HUB 🤖 -->
+      <div class="card" style="margin-bottom: 20px; border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.08));">
+        <div class="card-title-row" style="flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🤖</div>
+            <div>
+              <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                Gemini & Groq AI Cooperative Hub
+                <span id="ai-runtime-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(245, 158, 11, 0.15); color: #F59E0B; border-color: rgba(245, 158, 11, 0.3);">
+                  ⏸️ Runtime AI: Controlled
+                </span>
+                <span id="ai-pool-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
+                  Keys Active
+                </span>
+                <span id="groq-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(16, 185, 129, 0.15); color: #10B981; border-color: rgba(16, 185, 129, 0.3);">
+                  🦙 Groq Fallback: Ready
+                </span>
+              </h2>
+              <p class="card-desc">Cooperatively enriches movie metadata with Arabic localization, studio tags, and micro-genres with automatic Groq open-source failover</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button id="btn-toggle-ai" class="btn" onclick="window.toggleAiRuntime()" style="background: rgba(255, 255, 255, 0.08); font-size: 12px; font-weight: 600;">
+              🎛️ Toggle Runtime AI
+            </button>
+            <button id="btn-gap-scan" class="btn btn-primary" onclick="window.triggerCooperativeGapScan()" style="background: linear-gradient(135deg, #6366F1, #4F46E5); font-weight: 700;">
+              🚀 Launch Cooperative AI Gap-Scan
+            </button>
+            <button id="btn-discover-cats" class="btn" onclick="window.triggerAiCategoryDiscovery()" style="background: linear-gradient(135deg, #10B981, #059669); font-weight: 700; color: white;">
+              ✨ AI Discover & Dynamic Shelves
+            </button>
+            <button class="btn" onclick="window.triggerAiTest()" style="background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); font-weight: 600;">
+              ⚡ Test Key
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Cooperative AI Gap-Scan Progress Box -->
+        <div id="ai-gap-progress-box" style="margin-top: 14px; padding: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(99, 102, 241, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px;">
+            <span style="font-weight: 700; color: #818CF8;">🎯 Cooperative AI Gap-Scanner Progress:</span>
+            <span id="ai-gap-progress-label" style="font-weight: 700; color: white;">0 / 0 (0%)</span>
+          </div>
+          <div class="progress-track" style="height: 8px; border-radius: 4px; background: rgba(255,255,255,0.06);">
+            <div id="ai-gap-progress-fill" class="progress-fill" style="width: 0%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #6366F1, #818CF8, #10B981); transition: width 0.3s ease;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+            <span>Processing: <strong id="ai-gap-current-title" style="color: white;">Idle (Ready on demand)</strong></span>
+            <span>Enriched: <strong id="ai-gap-enriched-count" style="color: #10B981;">0</strong> | Failed: <strong id="ai-gap-failed-count" style="color: #EF4444;">0</strong></span>
+          </div>
+        </div>
+
+        <!-- Key Pool Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 14px;" id="ai-keys-container">
+          <!-- Injected via JavaScript -->
+        </div>
       </div>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>English Title</th>
-              <th>Arabic Title</th>
-              <th>Type</th>
-              <th>Live Titles</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="categories-tbody">
-            <!-- Injected via JavaScript -->
-          </tbody>
-        </table>
+
+      <!-- Live Server Health & Diagnostics -->
+      <div class="card">
+        <div class="card-title-row">
+          <div>
+            <h2 style="font-size: 15px; font-weight: 800;">Server System Diagnostics</h2>
+            <p class="card-desc">Process runtime and environment stats</p>
+          </div>
+          <div class="status-badge" style="background: rgba(6, 182, 212, 0.12); color: #06B6D4; border-color: rgba(6, 182, 212, 0.3);">
+            ⏱️ <span id="val-uptime">Live</span>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 10px;">
+          <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; border: 1px solid var(--border-subtle);">
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">RAM MEMORY USAGE</div>
+            <div style="font-size: 16px; font-weight: 800; color: white; margin-top: 4px;" id="val-memory">-- MB</div>
+          </div>
+          <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; border: 1px solid var(--border-subtle);">
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">DEPLOYMENT ENVIRONMENT</div>
+            <div style="font-size: 16px; font-weight: 800; color: #10B981; margin-top: 4px;">Railway Zero-Downtime</div>
+          </div>
+          <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; border: 1px solid var(--border-subtle);">
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">DATABASE ENGINE</div>
+            <div style="font-size: 16px; font-weight: 800; color: #60A5FA; margin-top: 4px;">Supabase PostgreSQL</div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- 🎬 AI ENRICHED MOVIES & QUALITY INSPECTION HUB 🎬 -->
-    <div class="card" style="margin-top: 24px; border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.05));">
-      <div class="card-title-row" style="flex-wrap: wrap; gap: 12px; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🎬</div>
+    <!-- ========================================================= -->
+    <!-- TAB 2: 🎬 CATALOGUE & METADATA EXPLORER                  -->
+    <!-- ========================================================= -->
+    <div id="tab-content-catalogue" class="tab-content" style="display: none;">
+      <!-- Top 4 Summary Metrics -->
+      <div class="grid-4">
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-label">Catalogue</span>
+            <div class="card-icon" style="background: rgba(229, 9, 20, 0.15); color: #E50914;">🎬</div>
+          </div>
+          <div class="card-value" id="val-total-movies">--</div>
+          <div class="card-desc">Total active movies</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-label">Arabic</span>
+            <div class="card-icon" style="background: rgba(16, 185, 129, 0.15); color: #10B981;">🌐</div>
+          </div>
+          <div class="card-value" id="val-arabic-total">--</div>
+          <div class="progress-track">
+            <div id="prog-arabic" class="progress-fill" style="width: 0%; background: linear-gradient(90deg, #10B981, #059669);"></div>
+          </div>
+          <div class="card-desc" id="val-arabic-pct">--% Translated</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-label">Studios</span>
+            <div class="card-icon" style="background: rgba(99, 102, 241, 0.15); color: #6366F1;">🏢</div>
+          </div>
+          <div class="card-value" id="val-studios-enriched">--</div>
+          <div class="card-desc">With company tags</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-label">Home Shelves</span>
+            <div class="card-icon" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B;">📁</div>
+          </div>
+          <div class="card-value" id="val-categories-count">--</div>
+          <div class="card-desc">Active dynamic shelves</div>
+        </div>
+      </div>
+
+      <!-- Translation Breakdown & Recent Releases -->
+      <div class="grid-2">
+        <!-- Arabic Detailed Breakdown -->
+        <div class="card">
+          <div class="card-title-row">
+            <h2 style="font-size: 14px; font-weight: 700;">Arabic Translation Coverage</h2>
+            <span class="card-label" id="val-arabic-unique-label">--</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                <span>Official Titles (<code>title_ar</code>)</span>
+                <strong id="val-title-ar">--</strong>
+              </div>
+              <div class="progress-track">
+                <div id="prog-title-ar" class="progress-fill" style="width: 0%; background: #6366F1;"></div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                <span>Overviews (<code>overview_ar</code>)</span>
+                <strong id="val-overview-ar">--</strong>
+              </div>
+              <div class="progress-track">
+                <div id="prog-overview-ar" class="progress-fill" style="width: 0%; background: #10B981;"></div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                <span>Taglines (<code>tagline_ar</code>)</span>
+                <strong id="val-tagline-ar">--</strong>
+              </div>
+              <div class="progress-track">
+                <div id="prog-tagline-ar" class="progress-fill" style="width: 0%; background: #F59E0B;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Years Breakdown -->
+        <div class="card">
+          <div class="card-title-row">
+            <h2 style="font-size: 14px; font-weight: 700;">Recent Releases Translated</h2>
+            <span class="card-label">By Year</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                <span>🔥 <strong>2026 Releases</strong> (Brand New)</span>
+                <strong id="val-y2026">--</strong>
+              </div>
+              <div class="progress-track">
+                <div id="prog-y2026" class="progress-fill" style="width: 0%; background: #E50914;"></div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                <span>⭐ <strong>2025 Releases</strong></span>
+                <strong id="val-y2025">--</strong>
+              </div>
+              <div class="progress-track">
+                <div id="prog-y2025" class="progress-fill" style="width: 0%; background: #3B82F6;"></div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                <span>✨ <strong>Modern Era</strong> (2020 – 2026)</span>
+                <strong id="val-modern">--</strong>
+              </div>
+              <div class="progress-track">
+                <div id="prog-modern" class="progress-fill" style="width: 0%; background: #8B5CF6;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Major Studios Breakdown Grid -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-title-row">
           <div>
-            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-              AI Enriched Movies & Quality Inspection Hub
-              <span id="enriched-total-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
-                Loading...
-              </span>
-            </h2>
-            <p class="card-desc">Inspect all titles enriched by Groq & Gemini with populated Arabic translations, studios, and micro-genres</p>
+            <h2 style="font-size: 15px; font-weight: 800;">Studio Hub Live Counters</h2>
+            <p class="card-desc">Titles accessible via Studio Hub watermark cards</p>
           </div>
         </div>
-
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-          <!-- Filter Engine Pills -->
-          <div style="display: flex; background: rgba(0,0,0,0.3); padding: 3px; border-radius: 8px; border: 1px solid var(--border-subtle);">
-            <button id="filter-engine-all" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; background: rgba(255,255,255,0.15); font-weight: 700;" onclick="filterEnrichedEngine('all')">🌟 All</button>
-            <button id="filter-engine-groq" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; color: #10B981;" onclick="filterEnrichedEngine('groq')">🦙 Groq</button>
-            <button id="filter-engine-google" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; color: #60A5FA;" onclick="filterEnrichedEngine('google')">🤖 Gemini</button>
-          </div>
-
-          <!-- Live Search Box -->
-          <input type="text" id="enriched-search-input" placeholder="🔍 Search title or arabic..." style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; width: 210px;" oninput="debounceEnrichedSearch(this.value)">
-
-          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="loadEnrichedMovies()">🔄 Refresh</button>
+        <div class="studios-grid" id="studios-container">
+          <!-- Injected via JavaScript -->
         </div>
       </div>
 
-      <!-- Enriched Movies Grid Container -->
-      <div id="enriched-movies-container" style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 14px;">
-        <!-- Injected via JavaScript -->
+      <!-- Active Home Categories Table -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-title-row" style="flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h2 style="font-size: 15px; font-weight: 800;">Active Published Home Categories</h2>
+            <p class="card-desc">Dynamic shelves active on mobile app</p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn" onclick="window.triggerAiCategoryDiscovery()" style="background: linear-gradient(135deg, #10B981, #059669); font-size: 12px; font-weight: 700; color: white;">
+              ✨ AI Discover New Shelves
+            </button>
+            <div id="categories-count-badge" class="status-badge" style="background: rgba(99, 102, 241, 0.12); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
+              -- Published Shelves
+            </div>
+          </div>
+        </div>
+        <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px; display:flex; align-items:center; gap:4px;">
+          <span>👈 Scroll horizontally to see Arabic & details 👉</span>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>English Title</th>
+                <th>Arabic Title</th>
+                <th>Type</th>
+                <th>Live Titles</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="categories-tbody">
+              <!-- Injected via JavaScript -->
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <!-- Pagination Footer -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 10px;">
-        <span id="enriched-pagination-info" style="font-size: 12px; color: var(--text-muted);">Showing 0-0 of 0 movies</span>
-        <div style="display: flex; gap: 8px;">
-          <button id="btn-enriched-prev" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(-1)" disabled>◀️ Previous</button>
-          <button id="btn-enriched-next" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(1)">Next ▶️</button>
+      <!-- 🎬 AI ENRICHED MOVIES & QUALITY INSPECTION HUB 🎬 -->
+      <div class="card" style="border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.05));">
+        <div class="card-title-row" style="flex-wrap: wrap; gap: 12px; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🎬</div>
+            <div>
+              <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                AI Enriched Movies & Quality Inspection Hub
+                <span id="enriched-total-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
+                  Loading...
+                </span>
+              </h2>
+              <p class="card-desc">Inspect all titles enriched by Groq & Gemini with populated Arabic translations, studios, and micro-genres</p>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <!-- Filter Engine Pills -->
+            <div style="display: flex; background: rgba(0,0,0,0.3); padding: 3px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+              <button id="filter-engine-all" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; background: rgba(255,255,255,0.15); font-weight: 700;" onclick="filterEnrichedEngine('all')">🌟 All</button>
+              <button id="filter-engine-groq" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; color: #10B981;" onclick="filterEnrichedEngine('groq')">🦙 Groq</button>
+              <button id="filter-engine-google" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; color: #60A5FA;" onclick="filterEnrichedEngine('google')">🤖 Gemini</button>
+            </div>
+
+            <!-- Live Search Box -->
+            <input type="text" id="enriched-search-input" placeholder="🔍 Search title or arabic..." style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; width: 210px;" oninput="debounceEnrichedSearch(this.value)">
+
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="loadEnrichedMovies()">🔄 Refresh</button>
+          </div>
+        </div>
+
+        <!-- Enriched Movies Grid Container -->
+        <div id="enriched-movies-container" style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 14px;">
+          <!-- Injected via JavaScript -->
+        </div>
+
+        <!-- Pagination Footer -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 10px;">
+          <span id="enriched-pagination-info" style="font-size: 12px; color: var(--text-muted);">Showing 0-0 of 0 movies</span>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-enriched-prev" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(-1)" disabled>◀️ Previous</button>
+            <button id="btn-enriched-next" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(1)">Next ▶️</button>
+          </div>
         </div>
       </div>
     </div>
@@ -959,6 +1029,31 @@ export function renderDashboardHtml(): string {
   <div id="toast">Notification</div>
 
   <script>
+    // ── Tab Switching Controller ──
+    window.switchTab = function(tabId) {
+      const btnOps = document.getElementById('tab-btn-operations');
+      const btnCat = document.getElementById('tab-btn-catalogue');
+      const tabOps = document.getElementById('tab-content-operations');
+      const tabCat = document.getElementById('tab-content-catalogue');
+
+      if (tabId === 'operations') {
+        if (btnOps) btnOps.classList.add('active');
+        if (btnCat) btnCat.classList.remove('active');
+        if (tabOps) tabOps.style.display = 'block';
+        if (tabCat) tabCat.style.display = 'none';
+        localStorage.setItem('teraflix_active_tab', 'operations');
+      } else {
+        if (btnCat) btnCat.classList.add('active');
+        if (btnOps) btnOps.classList.remove('active');
+        if (tabCat) tabCat.style.display = 'block';
+        if (tabOps) tabOps.style.display = 'none';
+        localStorage.setItem('teraflix_active_tab', 'catalogue');
+        if (typeof window.loadEnrichedMovies === 'function') {
+          window.loadEnrichedMovies();
+        }
+      }
+    };
+
     window.showToast = function(msg) {
       const toast = document.getElementById('toast');
       if (toast) {
@@ -1073,8 +1168,9 @@ export function renderDashboardHtml(): string {
         safeSetWidth('prog-arabic', cat.arabicCoveragePct || 0);
         safeSetText('val-arabic-pct', (cat.arabicCoveragePct || 0) + '% Translated');
         safeSetText('val-studios-enriched', (cat.withStudios || 0).toLocaleString());
+        safeSetText('val-categories-count', (Array.isArray(d.categories) ? d.categories.length : 0));
         safeSetText('val-uptime', srv.uptimeFormatted || 'Live');
-        safeSetText('val-memory', 'RAM: ' + (srv.memoryUsedMB || 0) + 'MB / ' + (srv.memoryTotalMB || 0) + 'MB');
+        safeSetText('val-memory', (srv.memoryUsedMB || 0) + ' MB / ' + (srv.memoryTotalMB || 0) + ' MB');
 
         const tot = cat.totalMovies || 10244;
         safeSetText('val-arabic-unique-label', (cat.withAnyArabic || 0).toLocaleString() + ' Titles');
@@ -1106,7 +1202,7 @@ export function renderDashboardHtml(): string {
         const studiosContainer = document.getElementById('studios-container');
         if (studiosContainer && Array.isArray(d.studios)) {
           studiosContainer.innerHTML = '';
-          d.studios.forEach(s => {
+          d.studios.forEach(function(s) {
             const div = document.createElement('div');
             div.className = 'studio-pill';
             div.innerHTML = 
@@ -1190,7 +1286,7 @@ export function renderDashboardHtml(): string {
             aiContainer.innerHTML = '';
             const allKeys = [...(Array.isArray(aiPool.keys) ? aiPool.keys : [])];
             if (groq && Array.isArray(groq.keys)) {
-              groq.keys.forEach(gk => {
+              groq.keys.forEach(function(gk) {
                 allKeys.push({
                   index: 'Groq-' + gk.index,
                   keyMasked: gk.keyMasked,
@@ -1203,7 +1299,7 @@ export function renderDashboardHtml(): string {
             }
 
             if (allKeys.length > 0) {
-              allKeys.forEach(k => {
+              allKeys.forEach(function(k) {
                 const div = document.createElement('div');
                 div.className = 'studio-pill';
                 div.style.padding = '8px 12px';
@@ -1238,7 +1334,7 @@ export function renderDashboardHtml(): string {
 
         if (tbody) {
           tbody.innerHTML = '';
-          cats.forEach(c => {
+          cats.forEach(function(c) {
             const tr = document.createElement('tr');
             tr.innerHTML = 
               '<td><strong>#' + c.sort_order + '</strong></td>' +
@@ -1299,81 +1395,87 @@ export function renderDashboardHtml(): string {
 
     window.toggleAutoScanner = async function() {
       try {
-        if (autoScannerRunning) {
-          await fetch('/api/scan/stop', { method: 'POST' });
-          window.showToast('⏸️ Continuous Auto-Scanner Paused.');
-        } else {
-          await fetch('/api/scan/start', { method: 'POST' });
-          window.showToast('🟢 Continuous 24/7 Auto-Scanner Resumed!');
-        }
-        setTimeout(window.fetchScannerStatus, 500);
+        const endpoint = autoScannerRunning ? '/api/scan/pause' : '/api/scan/start';
+        const res = await fetch(endpoint, { method: 'POST' });
+        const result = await res.json();
+        window.showToast(result.message || 'Auto-scanner state updated');
+        setTimeout(window.fetchScannerStatus, 300);
       } catch (err) {
-        window.showToast('❌ Error: ' + err.message);
+        window.showToast('❌ Failed: ' + err.message);
       }
     };
 
-    window.triggerBatchScan = async function(limit = 500) {
-      window.showToast('⚡ Triggering batch scan of next ' + limit + ' movies...');
+    window.triggerBatchScan = async function(limit) {
+      window.showToast('⚡ Triggering instant batch scan of ' + limit + ' movies...');
       try {
         const res = await fetch('/api/scan/batch?limit=' + limit, { method: 'POST' });
         const result = await res.json();
-        window.showToast('✓ ' + (result.message || 'Batch scan complete!'));
-        setTimeout(window.fetchMetrics, 1000);
-        setTimeout(window.fetchScannerStatus, 1000);
+        window.showToast(result.message || 'Batch scan completed!');
+        setTimeout(window.fetchMetrics, 500);
+        setTimeout(window.fetchScannerStatus, 500);
       } catch (err) {
         window.showToast('❌ Batch scan failed: ' + err.message);
       }
     };
 
     window.triggerMultiSourceSync = async function() {
-      window.showToast('🌐 Triggering Knowledge Graph sync (Netflix / Apple / Amazon)...');
+      window.showToast('🌐 Initializing Multi-Source Knowledge Graph Sync...');
       try {
-        const res = await fetch('/api/sync/multi-source', { method: 'POST' });
+        const res = await fetch('/api/sync/streaming-sources', { method: 'POST' });
         const result = await res.json();
-        window.showToast('✓ ' + (result.message || 'Multi-source sync started!'));
-        setTimeout(window.fetchMetrics, 2000);
-      } catch (err) {
-        window.showToast('❌ Knowledge Graph sync failed: ' + err.message);
-      }
-    };
-
-    window.triggerMovieSync = async function() {
-      window.showToast('⚡ Triggering background enrichment batch...');
-      try {
-        const res = await fetch('/api/sync/movies?batch=100', { method: 'POST' });
-        const result = await res.json();
-        window.showToast('✓ ' + (result.result?.message || 'Batch executed successfully!'));
-        setTimeout(window.fetchMetrics, 1200);
+        window.showToast('✅ ' + (result.message || 'Sync successful!'));
+        setTimeout(window.fetchMetrics, 500);
       } catch (err) {
         window.showToast('❌ Sync failed: ' + err.message);
       }
     };
 
-    window.triggerResetAndRescan = async function() {
-      const ok = confirm('Reset and Rescan Database from Scratch?\\\\n\\\\nThis will reset all movie enrichment timestamps in Supabase and restart the 24/7 background auto-scanner from movie #1 across all 10,244 titles.\\\\n\\\\nAre you sure you want to proceed?');
-      if (!ok) return;
+    window.triggerMovieSync = async function(batch) {
+      window.showToast('🎬 Categorizing next ' + batch + ' movies...');
+      try {
+        const res = await fetch('/api/sync/movies?batch=' + batch, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          window.showToast('✅ ' + (data.result?.message || 'Updated titles'));
+          setTimeout(window.fetchMetrics, 500);
+        } else {
+          window.showToast('❌ Sync failed: ' + data.error);
+        }
+      } catch (err) {
+        window.showToast('❌ Sync error: ' + err.message);
+      }
+    };
 
-      window.showToast('🔄 Resetting timestamps and starting fresh scan from scratch...');
+    window.triggerResetAndRescan = async function() {
+      if (!confirm('⚠️ WARNING: This will reset all enrichment timestamps across your ENTIRE catalogue (10,244 titles) and restart 24/7 multi-source enrichment from scratch.\\n\\nDo you wish to proceed?')) {
+        return;
+      }
+
+      window.showToast('🔄 Resetting catalogue timestamps and starting fresh scan...');
       try {
         const res = await fetch('/api/scan/reset', { method: 'POST' });
         const result = await res.json();
-        window.showToast('✓ ' + (result.message || 'Database rescan initiated!'));
-        setTimeout(window.fetchMetrics, 1000);
-        setTimeout(window.fetchScannerStatus, 1000);
+        window.showToast('🚀 ' + (result.message || 'Rescan started!'));
+        setTimeout(window.fetchMetrics, 500);
+        setTimeout(window.fetchScannerStatus, 500);
       } catch (err) {
         window.showToast('❌ Reset failed: ' + err.message);
       }
     };
 
     window.triggerRegenerateCategories = async function() {
-      window.showToast('🔄 Regenerating home categories...');
+      window.showToast('📁 Evaluating 40+ dynamic categories against database...');
       try {
         const res = await fetch('/api/sync/categories', { method: 'POST' });
-        const result = await res.json();
-        window.showToast('✓ Published ' + (result.result?.published || 0) + ' home categories!');
-        setTimeout(window.fetchMetrics, 1200);
+        const data = await res.json();
+        if (data.success) {
+          window.showToast('✅ Regenerated ' + data.result.approved + ' categories (' + data.result.skipped + ' skipped)');
+          setTimeout(window.fetchMetrics, 500);
+        } else {
+          window.showToast('❌ Category sync failed: ' + data.error);
+        }
       } catch (err) {
-        window.showToast('❌ Failed: ' + err.message);
+        window.showToast('❌ Category error: ' + err.message);
       }
     };
 
@@ -1616,6 +1718,7 @@ export function renderDashboardHtml(): string {
     window.triggerAiCategoryDiscovery = window.triggerAiCategoryDiscovery;
     window.openCreateModal = window.openCreateModal;
     window.closeCreateModal = window.closeCreateModal;
+    window.switchTab = window.switchTab;
 
     // Direct non-prefixed aliases for inline HTML onclick calls
     var fetchMetrics = window.fetchMetrics;
@@ -1640,6 +1743,11 @@ export function renderDashboardHtml(): string {
     var loadEnrichedMovies = window.loadEnrichedMovies;
     var inspectMovieJson = window.inspectMovieJson;
     var closeJsonModal = window.closeJsonModal;
+    var switchTab = window.switchTab;
+
+    // Restore saved active tab (if any)
+    const savedTab = localStorage.getItem('teraflix_active_tab') || 'operations';
+    window.switchTab(savedTab);
 
     // Initial load + auto-refresh
     window.fetchMetrics();
