@@ -596,8 +596,8 @@ Respond ONLY in valid JSON conforming to this schema:
     this.isCooperativeScanning = false;
   }
 
-  /// ── DYNAMIC HOME CATEGORY DISCOVERY & REALTIME PUBLISHING ──
-  /// Uses Gemini AI to discover trending, binge-worthy categories from the active catalogue and dynamically updates home_categories in realtime
+  /// ── MASTER AI HOME CATEGORY AUDIT, OPTIMIZATION & REALTIME MANAGEMENT ──
+  /// Evaluates, polishes, and organizes ALL home page categories (both base genres and dynamic AI shelves)
   public async discoverAndPublishDynamicCategories(): Promise<{
     success: boolean;
     discoveredCount: number;
@@ -605,70 +605,142 @@ Respond ONLY in valid JSON conforming to this schema:
     message: string;
   }> {
     const { SupabaseService } = await import('./supabase.service');
+    const { CategoryGeneratorService } = await import('./category_generator.service');
+    const { TmdbService } = await import('./tmdb.service');
     const supabase = SupabaseService.getClient();
+    const catGen = new CategoryGeneratorService();
+    const tmdb = new TmdbService();
 
-    console.log('[GEMINI_CATEGORY_DISCOVERY] 🧠 Initiating AI Dynamic Category Discovery...');
+    console.log('[GEMINI_CATEGORY_DISCOVERY] 🧠 Initiating Comprehensive Master AI Home Screen Optimization...');
 
-    const prompt = `You are the lead content curation and discovery architect for Teraflix (a premium streaming platform).
-Discover 6 to 10 brand-new, ultra-engaging, high-converting home page dynamic categories / shelves based on modern cinema trends, popular genres, and streaming tastes.
+    // 1. Fetch live worldwide trending IDs from TMDB API
+    const [dailyTrendingIds, weeklyTrendingIds] = await Promise.all([
+      tmdb.getTrendingMovies('day', 4),
+      tmdb.getTrendingMovies('week', 4),
+    ]);
 
-Requirements for each discovered category:
-1. "id": Unique snake_case identifier starting with "ai_" (e.g. "ai_cyberpunk_futures", "ai_a24_masterpieces", "ai_adrenaline_heists", "ai_mind_benders", "ai_space_odysseys", "ai_true_crime_thrills", "ai_dark_comedy_satires", "ai_epic_fantasy_realms").
-2. "title": Catchy, uppercase English title (e.g. "CYBERPUNK & DYSTOPIAN FUTURES", "A24 INDIE MASTERPIECES", "ADRENALINE HEISTS & HIGH-STAKES").
-3. "title_ar": Fluent, prestigious cinematic Arabic translation (e.g. "عوالم السايبربانك والمستقبل المظلم", "تحف سينما A24 المستقلة", "إثارة وسرقة وسرعة فائقة").
-4. "category_type": "curated"
-5. "filter_query": PostgREST filter string compatible with Supabase movies table (e.g. "or=(keywords_json.cs.[{\\"name\\":\\"Cyberpunk\\"}],keywords_json.cs.[{\\"name\\":\\"Dystopia\\"}])", "studios_json.cs.[{\\"id\\":420}]", "or=(keywords_json.cs.[{\\"name\\":\\"Heist\\"}],genres_json.cs.[{\\"id\\":28}])", "vote_average=gte.8.0&release_date=gte.2024-01-01").
-6. "order_by": Ordering field (e.g. "popularity.desc", "vote_average.desc", "release_date.desc.nullslast").
-7. "curation_reason": 1 sentence explaining why this shelf drives viewer engagement.
+    const baseCandidates = catGen.getCandidateCategories();
+
+    if (dailyTrendingIds.length > 0) {
+      const top10 = baseCandidates.find((c) => c.id === 'top10_today');
+      if (top10) top10.filter_query = `tmdb_id=in.(${dailyTrendingIds.join(',')})`;
+    }
+    if (weeklyTrendingIds.length > 0) {
+      const trending = baseCandidates.find((c) => c.id === 'trending_now');
+      if (trending) trending.filter_query = `tmdb_id=in.(${weeklyTrendingIds.join(',')})`;
+    }
+
+    // 2. Ask Gemini AI to polish Arabic localization, inject 4-5 fresh micro-genres, and organize sort hierarchy
+    const existingIds = baseCandidates.map((c) => c.id).join(', ');
+
+    const prompt = `You are the chief content curation and home-screen design architect for Teraflix (a premium streaming platform).
+You manage the ENTIRE Home Screen category lineup.
+
+Existing candidate categories:
+[${existingIds}]
+
+YOUR MISSION:
+1. "fresh_ai_shelves": Inject 4 to 5 BRAND NEW, ultra-engaging dynamic micro-genre shelves (IDs starting with "ai_") based on modern cinema trends (e.g. "ai_mind_benders", "ai_elevated_horror", "ai_adrenaline_heists", "ai_cyberpunk_futures", "ai_dark_comedy_satires", "ai_a24_indie_gems", "ai_epic_fantasy_realms").
+   - Include valid PostgREST "filter_query" compatible with Supabase movies table (e.g. "genres_json=cs.[{\\"id\\":878}]", "or=(genres_json.cs.[{\\"id\\":28}],keywords_json.cs.[{\\"name\\":\\"Heist\\"}])", "or=(keywords_json.cs.[{\\"name\\":\\"Mind-bending\\"}],genres_json.cs.[{\\"id\\":53}])", "vote_average=gte.7.5&release_date=gte.2023-01-01").
+   - Include fluent, prestigious Arabic translation "title_ar".
+2. "arabic_refinements": An object mapping any existing category ID to a superior, polished Arabic title if it can be improved.
+3. "curated_shelf_order": An array of strings representing the ideal top-to-bottom viewing order of all category IDs (mixing top rankings, fresh AI shelves, core genres, and nostalgia eras).
 
 Respond ONLY in valid JSON matching this schema:
 {
-  "categories": [
+  "fresh_ai_shelves": [
     {
       "id": "string",
       "title": "string",
       "title_ar": "string",
       "category_type": "curated",
       "filter_query": "string",
-      "order_by": "string",
-      "curation_reason": "string"
+      "order_by": "string"
     }
+  ],
+  "arabic_refinements": {
+    "category_id": "polished_arabic_title"
+  },
+  "curated_shelf_order": [
+    "top10_today",
+    "trending_now",
+    "ai_shelf_id",
+    "..."
   ]
 }`;
 
-    const aiRes = await this.generateJson<{ categories: DiscoveredCategory[] }>(prompt);
-    if (!aiRes || !Array.isArray(aiRes.categories) || aiRes.categories.length === 0) {
-      return {
-        success: false,
-        discoveredCount: 0,
-        publishedCategories: [],
-        message: 'AI category discovery returned no candidates.',
-      };
+    const aiRes = await this.generateJson<{
+      fresh_ai_shelves: Array<{
+        id: string;
+        title: string;
+        title_ar: string;
+        category_type: string;
+        filter_query: string;
+        order_by: string;
+      }>;
+      arabic_refinements: Record<string, string>;
+      curated_shelf_order: string[];
+    }>(prompt);
+
+    let allCandidateMap = new Map<string, any>();
+
+    // Add base candidates
+    for (const bc of baseCandidates) {
+      allCandidateMap.set(bc.id, { ...bc });
     }
 
-    // 1. Cleanly delete previous AI-generated dynamic categories so shelves never pile up/overload
-    const { error: delErr } = await supabase
-      .from('home_categories')
-      .delete()
-      .like('id', 'ai_%');
+    if (aiRes) {
+      // Apply Arabic refinements across existing categories
+      if (aiRes.arabic_refinements && typeof aiRes.arabic_refinements === 'object') {
+        for (const [id, polishedAr] of Object.entries(aiRes.arabic_refinements)) {
+          if (allCandidateMap.has(id) && polishedAr) {
+            allCandidateMap.get(id).title_ar = polishedAr;
+          }
+        }
+      }
 
-    if (delErr) {
-      console.warn('[GEMINI_CATEGORY_DISCOVERY] Warning deleting old AI categories:', delErr.message);
+      // Add fresh AI dynamic shelves
+      if (Array.isArray(aiRes.fresh_ai_shelves)) {
+        for (const aiShelf of aiRes.fresh_ai_shelves) {
+          allCandidateMap.set(aiShelf.id, {
+            id: aiShelf.id,
+            title: aiShelf.title,
+            title_ar: aiShelf.title_ar,
+            category_type: 'curated',
+            filter_query: aiShelf.filter_query,
+            order_by: aiShelf.order_by || 'popularity.desc',
+          });
+        }
+      }
+    }
+
+    // Determine final ordered list based on AI curated order
+    let finalCandidates: any[] = [];
+    if (aiRes && Array.isArray(aiRes.curated_shelf_order) && aiRes.curated_shelf_order.length > 0) {
+      const addedIds = new Set<string>();
+      for (const id of aiRes.curated_shelf_order) {
+        if (allCandidateMap.has(id) && !addedIds.has(id)) {
+          finalCandidates.push(allCandidateMap.get(id));
+          addedIds.add(id);
+        }
+      }
+      // Append any remaining categories not listed in curated_shelf_order
+      for (const [id, cat] of allCandidateMap.entries()) {
+        if (!addedIds.has(id)) {
+          finalCandidates.push(cat);
+          addedIds.add(id);
+        }
+      }
     } else {
-      console.log('[GEMINI_CATEGORY_DISCOVERY] 🧹 Purged previous AI shelves to make room for fresh discoveries.');
+      finalCandidates = Array.from(allCandidateMap.values());
     }
 
     const { env } = await import('../config/env');
     const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
-    const published: any[] = [];
+    const verifiedCategories: any[] = [];
 
-    // Base sort order for AI dynamic shelves
-    let nextSortOrder = 100;
-
-    // Limit to top 5 highest-converting categories to prevent overload
-    const candidates = aiRes.categories.slice(0, 5);
-
-    for (const cat of candidates) {
+    // 3. Parallel live count validation against Supabase movies table
+    for (const cat of finalCandidates) {
       try {
         let countUrl = `${env.SUPABASE_URL}/rest/v1/movies?select=id`;
         if (cat.filter_query) {
@@ -688,9 +760,9 @@ Respond ONLY in valid JSON matching this schema:
         const contentRange = countRes.headers['content-range'];
         const total = contentRange ? parseInt(contentRange.split('/')[1], 10) : 0;
 
-        // Require at least 5 matching movies
+        // Ensure category has at least 5 matching movies
         if (total >= 5) {
-          const payload = {
+          verifiedCategories.push({
             id: cat.id,
             title: cat.title,
             title_ar: cat.title_ar,
@@ -698,51 +770,56 @@ Respond ONLY in valid JSON matching this schema:
             genre_id: 0,
             filter_query: cat.filter_query,
             order_by: cat.order_by || 'popularity.desc',
-            sort_order: nextSortOrder++,
             movie_count: total,
             is_active: true,
             updated_at: new Date().toISOString(),
-          };
-
-          const { error: insertErr } = await supabase
-            .from('home_categories')
-            .upsert(payload, { onConflict: 'id' });
-
-          if (!insertErr) {
-            published.push({ ...payload, curation_reason: cat.curation_reason });
-            console.log(`[GEMINI_CATEGORY_DISCOVERY] 🌟 Published Fresh AI Shelf: "${cat.title}" (${total} titles)`);
-          }
+          });
+        } else {
+          console.log(`[GEMINI_CATEGORY_DISCOVERY] ✗ Dropping low-density shelf "${cat.title}" (${total} titles < 5)`);
         }
       } catch (err: any) {
         console.warn(`[GEMINI_CATEGORY_DISCOVERY] Skip category "${cat.title}":`, err.message);
       }
     }
 
-    // 2. Re-index and normalize all sort_order sequences strictly 1..N
-    try {
-      const { data: allCats } = await supabase
-        .from('home_categories')
-        .select('id, sort_order')
-        .order('sort_order', { ascending: true });
-
-      if (allCats && allCats.length > 0) {
-        for (let i = 0; i < allCats.length; i++) {
-          await supabase
-            .from('home_categories')
-            .update({ sort_order: i + 1 })
-            .eq('id', allCats[i].id);
-        }
-        console.log(`[GEMINI_CATEGORY_DISCOVERY] 🔢 Normalized sort_order across all ${allCats.length} active categories.`);
-      }
-    } catch (normErr: any) {
-      console.warn('[GEMINI_CATEGORY_DISCOVERY] Error normalizing sort order:', normErr.message);
+    if (verifiedCategories.length === 0) {
+      return {
+        success: false,
+        discoveredCount: 0,
+        publishedCategories: [],
+        message: 'No categories passed the movie count verification threshold.',
+      };
     }
+
+    // 4. Assign strictly normalized sort order (1..N)
+    verifiedCategories.forEach((cat, idx) => {
+      cat.sort_order = idx + 1;
+    });
+
+    // 5. Clean purge of obsolete / duplicate categories in Supabase
+    try {
+      await supabase.from('home_categories').delete().neq('id', 'keep_all');
+    } catch (_) {}
+
+    // 6. Atomic upsert to home_categories
+    const { error: upsertErr } = await supabase
+      .from('home_categories')
+      .upsert(verifiedCategories, { onConflict: 'id' });
+
+    if (upsertErr) {
+      console.error('[GEMINI_CATEGORY_DISCOVERY] Failed to sync home categories:', upsertErr.message);
+      throw upsertErr;
+    }
+
+    const aiCount = verifiedCategories.filter((c) => c.id.startsWith('ai_')).length;
+    console.log(`[GEMINI_CATEGORY_DISCOVERY] 🎉 Successfully audited and synchronized ${verifiedCategories.length} master categories (${aiCount} dynamic AI shelves)!`);
 
     return {
       success: true,
-      discoveredCount: published.length,
-      publishedCategories: published,
-      message: `Refreshed Home Screen: Replaced old AI shelves with ${published.length} fresh trending categories!`,
+      discoveredCount: verifiedCategories.length,
+      publishedCategories: verifiedCategories,
+      message: `Master AI Home Screen Synchronization Complete! Managed ${verifiedCategories.length} total shelves (${aiCount} dynamic AI shelves).`,
     };
   }
 }
+

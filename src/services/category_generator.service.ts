@@ -22,7 +22,7 @@ export class CategoryGeneratorService {
   }
 
   /// All potential category candidates to test against database catalogue
-  private getCandidateCategories(): CategoryDefinition[] {
+  public getCandidateCategories(): CategoryDefinition[] {
     return [
       // 1. Trending & Rankings
       {
