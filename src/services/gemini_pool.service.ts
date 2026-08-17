@@ -87,8 +87,19 @@ export class GeminiPoolService {
     status: 'healthy' | 'cooldown' | 'exhausted' | 'invalid';
     lastUsedAt: number | null;
   }> = new Map();
-  private groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-  private groqCandidateModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+  private groqModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+  private groqCandidateModels = [
+    process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3.6-27b',
+    'llama-3.3-70b-specdec',
+    'deepseek-r1-distill-llama-70b',
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'llama-3.2-3b-preview',
+    'llama-3.2-1b-preview',
+    'gemma2-9b-it',
+  ];
   private groqRoundRobinCursor = 0;
 
   private constructor() {
@@ -124,7 +135,7 @@ export class GeminiPoolService {
     const envKeys = raw
       .split(/[\r\n,;]+/)
       .map((k) => k.replace(/['" \t]/g, '').trim())
-      .filter((k) => k.length > 10 && !k.startsWith('#'));
+      .filter((k) => k.length > 20 && !k.startsWith('#'));
 
     const activeKeys = Array.from(new Set(envKeys));
     this.keyPool = activeKeys;
@@ -168,7 +179,42 @@ export class GeminiPoolService {
     }
 
     if (this.groqKeyPool.length > 0) {
-      console.log(`[GROQ_POOL] 🦙 Initialized Groq Open-Source Fallback Pool with ${this.groqKeyPool.length} keys (Model: ${this.groqModel})`);
+      console.log(`[GROQ_POOL] 🦙 Initialized Groq Open-Source Fallback Pool with ${this.groqKeyPool.length} keys`);
+      // Auto-discover live Groq models for this specific account/key
+      this.discoverGroqModels().catch(() => {});
+    }
+  }
+
+  /// Programmatically queries Groq /v1/models to discover active models on this key
+  private async discoverGroqModels(): Promise<void> {
+    if (this.groqKeyPool.length === 0) return;
+    const testKey = this.groqKeyPool[0];
+    try {
+      const res = await axios.get('https://api.groq.com/openai/v1/models', {
+        headers: { Authorization: `Bearer ${testKey}` },
+        timeout: 8000,
+      });
+
+      const rawModels: Array<{ id: string }> = res.data?.data || [];
+      if (rawModels.length > 0) {
+        const chatModels = rawModels
+          .map((m) => m.id)
+          .filter((id) => !/whisper|audio|embed|tts|vision|guard/i.test(id));
+
+        if (chatModels.length > 0) {
+          const sorted = chatModels.sort((a, b) => {
+            const scoreA = /120b|70b/i.test(a) ? 100 : /27b|32b|20b/i.test(a) ? 80 : /8b/i.test(a) ? 60 : 50;
+            const scoreB = /120b|70b/i.test(b) ? 100 : /27b|32b|20b/i.test(b) ? 80 : /8b/i.test(b) ? 60 : 50;
+            return scoreB - scoreA;
+          });
+
+          this.groqCandidateModels = Array.from(new Set([...sorted, ...this.groqCandidateModels]));
+          this.groqModel = this.groqCandidateModels[0];
+          console.log(`[GROQ_POOL] ✅ Live Groq Models Discovered: [${this.groqCandidateModels.slice(0, 4).join(', ')}]`);
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[GROQ_POOL] ⚠️ Model discovery notice: ${err.message}. Using default production cascade.`);
     }
   }
 
