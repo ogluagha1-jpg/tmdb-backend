@@ -1491,118 +1491,108 @@ export function renderDashboardHtml(): string {
       if (!container) return;
 
       try {
-        const url = `/api/ai/enriched-movies?engine=${encodeURIComponent(enrichedCurrentEngine)}&search=${encodeURIComponent(enrichedCurrentSearch)}&limit=${enrichedLimit}&offset=${enrichedCurrentOffset}`;
+        const url = '/api/ai/enriched-movies?engine=' + encodeURIComponent(enrichedCurrentEngine) + '&search=' + encodeURIComponent(enrichedCurrentSearch) + '&limit=' + enrichedLimit + '&offset=' + enrichedCurrentOffset;
         const res = await fetch(url);
         const data = await res.json();
 
         if (!data.success) {
-          container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--text-muted);">Failed to load movies: ${data.error}</div>`;
+          container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 30px; color: var(--text-muted);">Failed to load movies: ' + data.error + '</div>';
           return;
         }
 
         enrichedLoadedData = data.movies || [];
         const total = data.total || 0;
-        if (badge) badge.innerText = `${total.toLocaleString()} Enriched Titles`;
+        if (badge) badge.innerText = total.toLocaleString() + ' Enriched Titles';
 
         if (info) {
           const from = total === 0 ? 0 : enrichedCurrentOffset + 1;
           const to = Math.min(enrichedCurrentOffset + enrichedLoadedData.length, total);
-          info.innerText = `Showing ${from}-${to} of ${total.toLocaleString()} enriched movies`;
+          info.innerText = 'Showing ' + from + '-' + to + ' of ' + total.toLocaleString() + ' enriched movies';
         }
 
         if (btnPrev) btnPrev.disabled = enrichedCurrentOffset === 0;
         if (btnNext) btnNext.disabled = enrichedCurrentOffset + enrichedLoadedData.length >= total;
 
         if (enrichedLoadedData.length === 0) {
-          container.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; padding: 40px 20px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px dashed var(--border-subtle);">
-              <div style="font-size: 32px; margin-bottom: 8px;">🎬</div>
-              <h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary);">No enriched movies found matching criteria</h3>
-              <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Launch the AI Gap-Scan or click "Test AI Enrichment" to populate movie metadata.</p>
-            </div>`;
+          container.innerHTML = 
+            '<div style="grid-column: 1/-1; text-align: center; padding: 40px 20px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px dashed var(--border-subtle);">' +
+              '<div style="font-size: 32px; margin-bottom: 8px;">🎬</div>' +
+              '<h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary);">No enriched movies found matching criteria</h3>' +
+              '<p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Launch the AI Gap-Scan or click "Test AI Enrichment" to populate movie metadata.</p>' +
+            '</div>';
           return;
         }
 
-        container.innerHTML = enrichedLoadedData.map((m, idx) => {
-          const isGroq = (m.ai_model || '').toLowerCase().includes('groq');
-          const isGoogle = (m.ai_model || '').toLowerCase().includes('google') || (m.ai_model || '').toLowerCase().includes('gemini');
+        container.innerHTML = enrichedLoadedData.map(function(m, idx) {
+          const isGroq = (m.ai_model || '').toLowerCase().indexOf('groq') !== -1;
+          const isGoogle = (m.ai_model || '').toLowerCase().indexOf('google') !== -1 || (m.ai_model || '').toLowerCase().indexOf('gemini') !== -1;
           
           const modelBadge = isGroq
-            ? `<span style="background: rgba(16,185,129,0.18); color: #10B981; border: 1px solid rgba(16,185,129,0.35); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;">🦙 ${m.ai_model}</span>`
+            ? '<span style="background: rgba(16,185,129,0.18); color: #10B981; border: 1px solid rgba(16,185,129,0.35); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;">🦙 ' + m.ai_model + '</span>'
             : isGoogle
-            ? `<span style="background: rgba(59,130,246,0.18); color: #60A5FA; border: 1px solid rgba(59,130,246,0.35); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;">🤖 ${m.ai_model}</span>`
-            : `<span style="background: rgba(255,255,255,0.08); color: var(--text-secondary); font-size: 10px; padding: 2px 6px; border-radius: 6px;">✨ AI Enriched</span>`;
+            ? '<span style="background: rgba(59,130,246,0.18); color: #60A5FA; border: 1px solid rgba(59,130,246,0.35); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;">🤖 ' + m.ai_model + '</span>'
+            : '<span style="background: rgba(255,255,255,0.08); color: var(--text-secondary); font-size: 10px; padding: 2px 6px; border-radius: 6px;">✨ AI Enriched</span>';
 
-          const posterSrc = m.poster_path ? `https://image.tmdb.org/t/p/w185${m.poster_path}` : 'https://placehold.co/185x278/161b22/94a3b8?text=No+Poster';
+          const posterSrc = m.poster_path ? 'https://image.tmdb.org/t/p/w185' + m.poster_path : 'https://placehold.co/185x278/161b22/94a3b8?text=No+Poster';
 
           const studios = Array.isArray(m.studios_json) ? m.studios_json.slice(0, 3) : [];
-          const studioBadges = studios.map(s => `
-            <span style="background: rgba(99,102,241,0.15); color: #A5B4FC; border: 1px solid rgba(99,102,241,0.25); font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; display: inline-block;">
-              🏢 ${s.name || s}
-            </span>
-          `).join('');
+          const studioBadges = studios.map(function(s) {
+            return '<span style="background: rgba(99,102,241,0.15); color: #A5B4FC; border: 1px solid rgba(99,102,241,0.25); font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; display: inline-block;">🏢 ' + (s.name || s) + '</span>';
+          }).join(' ');
 
           const keywords = Array.isArray(m.keywords_json) ? m.keywords_json.slice(0, 4) : [];
-          const keywordBadges = keywords.map(k => `
-            <span style="background: rgba(255,255,255,0.05); color: #CBD5E1; border: 1px solid rgba(255,255,255,0.08); font-size: 10px; padding: 2px 6px; border-radius: 4px; display: inline-block;">
-              🏷️ ${k.name || k}
-            </span>
-          `).join('');
+          const keywordBadges = keywords.map(function(k) {
+            return '<span style="background: rgba(255,255,255,0.05); color: #CBD5E1; border: 1px solid rgba(255,255,255,0.08); font-size: 10px; padding: 2px 6px; border-radius: 4px; display: inline-block;">🏷️ ' + (k.name || k) + '</span>';
+          }).join(' ');
 
-          return `
-            <div style="background: rgba(22,27,34,0.9); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s ease; position: relative;">
-              <div>
-                <!-- Top Row: Poster + English Title + Model -->
-                <div style="display: flex; gap: 12px; margin-bottom: 12px;">
-                  <img src="${posterSrc}" alt="${m.title}" style="width: 54px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #0B0E14; border: 1px solid rgba(255,255,255,0.06);">
-                  <div style="flex: 1; min-width: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 4px;">
-                      <h4 style="font-size: 13px; font-weight: 800; color: white; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${m.title}</h4>
-                      <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">${m.year || ''}</span>
-                    </div>
-                    <div style="margin-bottom: 6px;">
-                      ${modelBadge}
-                    </div>
-                    <div style="font-size: 10px; color: var(--text-muted);">ID: #${m.id} • Pop: ${Math.round(m.popularity || 0)}</div>
-                  </div>
-                </div>
+          const taglineHtml = m.tagline_ar ? '<div style="font-size: 11px; color: #F59E0B; font-style: italic; direction: rtl; margin-bottom: 4px; padding: 3px 6px; background: rgba(245,158,11,0.08); border-radius: 4px;">&quot;' + m.tagline_ar + '&quot;</div>' : '';
 
-                <!-- Arabic Localization Card -->
-                <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; margin-bottom: 10px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <span style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase;">🇸🇦 Arabic Localization</span>
-                    <strong style="font-size: 12px; color: white; direction: rtl;">${m.title_ar || 'غير مترجم'}</strong>
-                  </div>
-                  ${m.tagline_ar ? `<div style="font-size: 11px; color: #F59E0B; font-style: italic; direction: rtl; margin-bottom: 4px; padding: 3px 6px; background: rgba(245,158,11,0.08); border-radius: 4px;">"${m.tagline_ar}"</div>` : ''}
-                  <p style="font-size: 11px; color: var(--text-secondary); direction: rtl; line-height: 1.4; max-height: 60px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
-                    ${m.overview_ar || 'لا يوجد وصف عربي متاح.'}
-                  </p>
-                </div>
+          return '<div style="background: rgba(22,27,34,0.9); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s ease; position: relative;">' +
+              '<div>' +
+                '<div style="display: flex; gap: 12px; margin-bottom: 12px;">' +
+                  '<img src="' + posterSrc + '" alt="' + (m.title || '') + '" style="width: 54px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #0B0E14; border: 1px solid rgba(255,255,255,0.06);">' +
+                  '<div style="flex: 1; min-width: 0;">' +
+                    '<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 4px;">' +
+                      '<h4 style="font-size: 13px; font-weight: 800; color: white; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + (m.title || 'Untitled') + '</h4>' +
+                      '<span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">' + (m.year || '') + '</span>' +
+                    </div>' +
+                    '<div style="margin-bottom: 6px;">' + modelBadge + '</div>' +
+                    '<div style="font-size: 10px; color: var(--text-muted);">ID: #' + m.id + ' • Pop: ' + Math.round(m.popularity || 0) + '</div>' +
+                  '</div>' +
+                '</div>' +
 
-                <!-- Studios & Micro-Genres -->
-                <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
-                  ${studios.length > 0 ? `<div style="display: flex; flex-wrap: wrap; gap: 4px;">${studioBadges}</div>` : ''}
-                  ${keywords.length > 0 ? `<div style="display: flex; flex-wrap: wrap; gap: 4px;">${keywordBadges}</div>` : ''}
-                </div>
-              </div>
+                '<div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; margin-bottom: 10px;">' +
+                  '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">' +
+                    '<span style="font-size: 10px; font-weight: 700; color: #10B981; text-transform: uppercase;">🇸🇦 Arabic Localization</span>' +
+                    '<strong style="font-size: 12px; color: white; direction: rtl;">' + (m.title_ar || 'غير مترجم') + '</strong>' +
+                  '</div>' +
+                  taglineHtml +
+                  '<p style="font-size: 11px; color: var(--text-secondary); direction: rtl; line-height: 1.4; max-height: 60px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">' +
+                    (m.overview_ar || 'لا يوجد وصف عربي متاح.') +
+                  '</p>' +
+                '</div>' +
 
-              <!-- Action Bar -->
-              <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05);">
-                <span style="font-size: 10px; color: var(--text-muted);">Enriched: ${m.enriched_at ? new Date(m.enriched_at).toLocaleTimeString() : 'Recently'}</span>
-                <button class="btn btn-secondary" style="padding: 3px 8px; font-size: 10px;" onclick="inspectMovieJson(${idx})">🔍 View Raw JSON</button>
-              </div>
-            </div>
-          `;
+                '<div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">' +
+                  (studios.length > 0 ? '<div style="display: flex; flex-wrap: wrap; gap: 4px;">' + studioBadges + '</div>' : '') +
+                  (keywords.length > 0 ? '<div style="display: flex; flex-wrap: wrap; gap: 4px;">' + keywordBadges + '</div>' : '') +
+                '</div>' +
+              '</div>' +
+
+              '<div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05);">' +
+                '<span style="font-size: 10px; color: var(--text-muted);">Enriched: ' + (m.enriched_at ? new Date(m.enriched_at).toLocaleTimeString() : 'Recently') + '</span>' +
+                '<button class="btn btn-secondary" style="padding: 3px 8px; font-size: 10px;" onclick="inspectMovieJson(' + idx + ')">🔍 View Raw JSON</button>' +
+              '</div>' +
+            '</div>';
         }).join('');
       } catch (err) {
-        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #EF4444;">Error fetching enriched movies: ${err.message}</div>`;
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #EF4444;">Error fetching enriched movies: ' + err.message + '</div>';
       }
     };
 
     window.inspectMovieJson = function(idx) {
       const movie = enrichedLoadedData[idx];
       if (!movie) return;
-      document.getElementById('json-modal-title').innerText = `🔍 #${movie.id} - ${movie.title}`;
+      document.getElementById('json-modal-title').innerText = '🔍 #' + movie.id + ' - ' + movie.title;
       document.getElementById('json-modal-content').innerText = JSON.stringify(movie, null, 2);
       document.getElementById('json-modal').classList.add('active');
     };
