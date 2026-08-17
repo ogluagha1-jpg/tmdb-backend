@@ -36,6 +36,9 @@ app.get('/api/metrics', async (_req: Request, res: Response) => {
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'healthy',
+    version: '1.2.0',
+    build: 'd70e833',
+    service: 'teraflix-categorization-backend',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
   });
