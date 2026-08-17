@@ -118,8 +118,9 @@ export class GeminiPoolService {
 
     const customSingle = process.env.GEMINI_API_KEY ? [process.env.GEMINI_API_KEY.trim()] : [];
 
-    const merged = Array.from(new Set([...envKeys, ...customSingle, ...this.defaultKeyPool])).filter((k) => k.length > 10);
-    this.keyPool = merged;
+    // If user provided keys in Railway environment variables, use them directly
+    const userEnvKeys = Array.from(new Set([...envKeys, ...customSingle])).filter((k) => k.length > 10);
+    this.keyPool = userEnvKeys.length > 0 ? userEnvKeys : this.defaultKeyPool;
 
     for (const k of this.keyPool) {
       this.keyStats.set(k, {
