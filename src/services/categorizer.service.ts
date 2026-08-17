@@ -3,10 +3,14 @@ import { TmdbService } from './tmdb.service';
 import { CategoryGeneratorService } from './category_generator.service';
 
 /**
- * CategorizerService:
- * Streamlined backend service for multi-source original tagging,
- * cooperative missing-metadata identification, and category synchronization.
- * (Direct official TMDB enrichment is delegated to the local Python engine).
+ * CategorizerService — Cooperative Multi-Engine Metadata Processor
+ *
+ * This does NOT blindly re-scrape TMDB (that is handled by the local Python engine).
+ * Instead it cooperatively:
+ *   1. Tags streaming platform originals (Netflix, Apple TV+, Disney+, etc.)
+ *   2. Identifies movies missing specific fields (title_ar, overview_ar, studios_json, keywords_json)
+ *   3. Uses AI (Gemini / Groq) to fill those gaps
+ *   4. Regenerates dynamic home categories
  */
 export class CategorizerService {
   private tmdb: TmdbService;
@@ -32,38 +36,98 @@ export class CategorizerService {
       .trim();
   }
 
-  /// Cooperative Missing-Fields Sync:
-  /// Identifies titles that still lack Arabic metadata, studios, or keywords after TMDB ingestion,
-  /// tags streaming originals, and updates dynamic home categories.
+  /// Helper to process items with controlled concurrency
+  private async pMap<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+    const results: R[] = [];
+    const executing: Promise<any>[] = [];
+
+    for (const item of items) {
+      const p = fn(item).then((res) => results.push(res));
+      executing.push(p);
+
+      if (executing.length >= limit) {
+        await Promise.race(executing);
+        for (let i = executing.length - 1; i >= 0; i--) {
+          const isSettled = await Promise.race([executing[i].then(() => true), Promise.resolve(false)]);
+          if (isSettled) executing.splice(i, 1);
+        }
+      }
+    }
+
+    await Promise.all(executing);
+    return results;
+  }
+
+  /**
+   * Cooperative Missing-Fields Sync:
+   * 1. Tags streaming originals across database
+   * 2. Identifies titles missing Arabic metadata, studios, or keywords
+   * 3. Uses AI (Gemini/Groq) to fill those gaps when keys are available
+   * 4. Regenerates dynamic home categories
+   */
   async syncUncategorizedMovies(
     batchSize: number = 100,
     _offset: number = 0
   ): Promise<{ processed: number; updated: number; gapsIdentified: number }> {
     const supabase = SupabaseService.getClient();
 
-    console.log('[CATEGORIZER] Running cooperative metadata audit across database...');
+    console.log('[CATEGORIZER] Running cooperative multi-engine metadata audit...');
 
     // 1. Tag streaming originals across database
     const originalsResult = await this.syncMultiSourceStreamingOriginals(batchSize);
 
-    // 2. Identify gap titles requiring AI translation / studio tagging
+    // 2. Identify gap titles requiring enrichment
     const { data: gapMovies, count: totalGaps } = await supabase
       .from('movies')
-      .select('id, title, tmdb_id, title_ar, overview_ar, studios_json', { count: 'exact' })
+      .select('id, title, tmdb_id, title_ar, overview_ar, studios_json, keywords_json', { count: 'exact' })
       .or('title_ar.is.null,overview_ar.is.null,studios_json.is.null,studios_json.eq.[]')
+      .order('popularity', { ascending: false, nullsFirst: false })
       .limit(batchSize);
 
     const gapsCount = totalGaps || gapMovies?.length || 0;
-    console.log(`[CATEGORIZER] Cooperative audit complete: ${originalsResult.tagged} originals tagged, ${gapsCount} gap titles identified.`);
 
-    // 3. Regenerate dynamic home categories
+    // 3. Attempt cooperative AI gap-fill if AI keys are configured
+    let gapsFilled = 0;
+    if (gapsCount > 0) {
+      try {
+        const { GeminiPoolService } = await import('./gemini_pool.service');
+        const pool = GeminiPoolService.getInstance();
+        const metrics = pool.getPoolMetrics();
+        const hasAiKeys = metrics.totalKeys > 0 || (metrics.groq?.isConfigured ?? false);
+
+        if (hasAiKeys && !metrics.cooperativeScan.isRunning) {
+          console.log(`[CATEGORIZER] 🧠 ${gapsCount} movies missing fields. Launching AI cooperative gap-fill...`);
+          await pool.startCooperativeGapScan({ maxTitles: Math.min(gapsCount, batchSize) });
+
+          // Wait for gap scan to finish (with timeout)
+          const maxWait = Math.min(batchSize * 2000, 300000);
+          const start = Date.now();
+          while (Date.now() - start < maxWait) {
+            const status = pool.getPoolMetrics().cooperativeScan;
+            if (!status.isRunning) break;
+            await new Promise((r) => setTimeout(r, 3000));
+          }
+          gapsFilled = pool.getPoolMetrics().cooperativeScan.enriched;
+        } else if (hasAiKeys && metrics.cooperativeScan.isRunning) {
+          console.log(`[CATEGORIZER] ℹ️ AI gap-scan already in progress. ${gapsCount} gaps pending.`);
+        } else {
+          console.log(`[CATEGORIZER] ℹ️ No AI keys configured. ${gapsCount} gap titles identified but skipping AI fill.`);
+        }
+      } catch (err: any) {
+        console.warn('[CATEGORIZER] AI gap-fill error (non-fatal):', err.message);
+      }
+    }
+
+    console.log(`[CATEGORIZER] ✅ Cooperative audit complete: ${originalsResult.tagged} originals tagged, ${gapsFilled} gaps filled by AI, ${gapsCount} total gaps identified.`);
+
+    // 4. Regenerate dynamic home categories
     await this.generator.generateAndSyncCategories().catch((e) => {
       console.error('[CATEGORIZER] Error syncing categories:', e.message);
     });
 
     return {
       processed: originalsResult.processed,
-      updated: originalsResult.tagged,
+      updated: originalsResult.tagged + gapsFilled,
       gapsIdentified: gapsCount,
     };
   }
@@ -78,7 +142,7 @@ export class CategorizerService {
     let totalTagged = 0;
     let totalProcessed = 0;
 
-    console.log('[CATEGORIZER] 📡 Starting Multi-Source Streaming Originals Sync across database...');
+    console.log('[CATEGORIZER] 📡 Starting Multi-Source Streaming Originals Sync...');
 
     while (true) {
       const { data: movies, error } = await supabase
