@@ -387,6 +387,19 @@ export class CategoryGeneratorService {
 
   /// Regenerates the home_categories table in Supabase with verified non-empty categories
   async generateAndSyncCategories(): Promise<{ totalCandidates: number; published: number }> {
+    const { GeminiPoolService } = await import('./gemini_pool.service');
+    const pool = GeminiPoolService.getInstance();
+
+    // If Gemini AI is enabled by admin, automatically launch Master AI Category Management!
+    if (pool.isAiEnabled()) {
+      console.log('[CATEGORY_GEN] 🤖 Gemini AI is ENABLED: Launching Master AI Category Optimization...');
+      const aiResult = await pool.discoverAndPublishDynamicCategories();
+      return {
+        totalCandidates: aiResult.discoveredCount,
+        published: aiResult.discoveredCount,
+      };
+    }
+
     const supabase = SupabaseService.getClient();
     const minThreshold = env.MIN_MOVIES_PER_CATEGORY;
     console.log(`[CATEGORY_GEN] Evaluating categories with real-time TMDB trending data (threshold >= ${minThreshold} movies)...`);
