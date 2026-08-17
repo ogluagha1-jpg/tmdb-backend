@@ -228,52 +228,34 @@ app.post('/api/scan/reset', async (_req: Request, res: Response) => {
   }
 });
 
-// 15. Test Single Movie AI Enrichment Endpoint (Supports ?engine=groq | gemini | auto)
+// 15. Test Single Movie AI Enrichment Endpoint
 app.post('/api/ai/test', async (req: Request, res: Response) => {
   try {
-    const title = req.body?.title || req.query?.title || 'Inception';
-    const year = req.body?.year || req.query?.year || 2010;
-    const overview = req.body?.overview || req.query?.overview || 'A thief who steals corporate secrets through dream-sharing technology...';
-    const engine = (req.body?.engine || req.query?.engine || 'auto') as 'auto' | 'gemini' | 'groq';
+    const title = req.body?.title || 'Inception';
+    const year = req.body?.year || 2010;
+    const overview = req.body?.overview || 'A thief who steals corporate secrets through dream-sharing technology...';
 
     const { GeminiPoolService } = await import('./services/gemini_pool.service');
     const poolMetrics = GeminiPoolService.getInstance().getPoolMetrics();
 
-    if (poolMetrics.totalKeys === 0 && (!poolMetrics.groq || !poolMetrics.groq.isConfigured)) {
+    if (poolMetrics.totalKeys === 0) {
       return res.status(200).json({
         success: false,
-        message: 'No AI API keys configured (Neither GEMINI_API_KEYS nor GROQ_API_KEYS). Please add them in Railway Variables.',
+        message: 'No GEMINI_API_KEYS found in Railway. Please add your Gemini keys in Railway Variables.',
         pool: poolMetrics,
       });
     }
 
-    const t0 = Date.now();
-    let result = null;
+    const result = await GeminiPoolService.getInstance().enrichMovieWithAi({
+      title,
+      year,
+      overview,
+    });
 
-    if (engine === 'groq') {
-      result = await GeminiPoolService.getInstance().callGroqOpenSource<any>(
-        `Analyze the movie "${title}" (${year}) and return JSON with title_ar, overview_ar, tagline_ar, primary_studio, studio_id, thematic_keywords, vibe_badges.`
-      );
-    } else if (engine === 'gemini') {
-      result = await GeminiPoolService.getInstance().callGeminiPool<any>(
-        `Analyze the movie "${title}" (${year}) and return JSON with title_ar, overview_ar, tagline_ar, primary_studio, studio_id, thematic_keywords, vibe_badges.`
-      );
-    } else {
-      result = await GeminiPoolService.getInstance().enrichMovieWithAi({
-        title,
-        year,
-        overview,
-      });
-    }
-
-    const latencyMs = Date.now() - t0;
     const updatedPool = GeminiPoolService.getInstance().getPoolMetrics();
-
     res.status(200).json({
       success: !!result,
-      latencyMs,
-      engineUsed: result?.ai_model || (engine === 'auto' ? (result ? 'hybrid-auto' : 'none') : engine),
-      message: result ? `AI successfully enriched "${title}" in ${latencyMs}ms!` : 'AI test failed (keys cooling down or rate-limited)',
+      message: result ? `AI successfully enriched "${title}"!` : 'AI test failed (keys cooling down or revoked by Google)',
       result,
       pool: updatedPool,
     });
@@ -360,44 +342,6 @@ app.post('/api/ai/categories/discover', async (_req: Request, res: Response) => 
     const { GeminiPoolService } = await import('./services/gemini_pool.service');
     const result = await GeminiPoolService.getInstance().discoverAndPublishDynamicCategories();
     res.status(200).json(result);
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 23. Get Recently Enriched Movies for Live Quality Assessment & Preview
-app.get('/api/ai/recent-enriched', async (req: Request, res: Response) => {
-  try {
-    const limit = parseInt(req.query.limit as string, 10) || 24;
-    const provider = req.query.provider as string; // 'groq' | 'google' | 'all'
-    const { SupabaseService } = await import('./services/supabase.service');
-    const supabase = SupabaseService.getClient();
-
-    let query = supabase
-      .from('movies')
-      .select('id, title, year, popularity, title_ar, overview_ar, tagline_ar, studios_json, keywords_json, ai_model, enriched_at')
-      .not('title_ar', 'is', null)
-      .not('overview_ar', 'is', null)
-      .order('id', { ascending: false })
-      .limit(limit);
-
-    if (provider && provider !== 'all') {
-      query = query.ilike('ai_model', `${provider}/%`);
-    }
-
-    const { data: movies, error } = await query;
-    if (error) throw error;
-
-    // Calculate quality statistics
-    const stats = {
-      total: movies?.length || 0,
-      groqCount: movies?.filter((m: any) => m.ai_model?.startsWith('groq/')).length || 0,
-      geminiCount: movies?.filter((m: any) => m.ai_model?.startsWith('google/')).length || 0,
-      withTaglines: movies?.filter((m: any) => !!m.tagline_ar).length || 0,
-      withStudios: movies?.filter((m: any) => Array.isArray(m.studios_json) && m.studios_json.length > 0).length || 0,
-    };
-
-    res.status(200).json({ success: true, stats, movies });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
