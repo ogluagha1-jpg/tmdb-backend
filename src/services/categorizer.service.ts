@@ -1,23 +1,34 @@
 import { SupabaseService } from './supabase.service';
 import { TmdbService } from './tmdb.service';
+import { ImdbService } from './imdb.service';
+import { CinemetaService } from './cinemeta.service';
+import { StreamingSourcesService } from './streaming_sources.service';
 import { CategoryGeneratorService } from './category_generator.service';
 
 /**
- * CategorizerService — Cooperative Multi-Engine Metadata Processor
+ * CategorizerService — Cooperative Multi-Engine Metadata & Taxonomist Service
  *
- * This does NOT blindly re-scrape TMDB (that is handled by the local Python engine).
- * Instead it cooperatively:
- *   1. Tags streaming platform originals (Netflix, Apple TV+, Disney+, etc.)
- *   2. Identifies movies missing specific fields (title_ar, overview_ar, studios_json, keywords_json)
- *   3. Uses AI (Gemini / Groq) to fill those gaps
- *   4. Regenerates dynamic home categories
+ * Architecture:
+ * 1. TIER 1 (Deterministic Non-AI Multi-Engine — ALWAYS ACTIVE):
+ *    - TMDB Arabic Endpoint & Credits (ar-SA overview, Arabic tagline, Arabic cast)
+ *    - Wikipedia Arabic Interlanguage API (resolves missing Arabic titles)
+ *    - Cinemeta CDN Mirrors (Stremio metadata, runtime, description, trailer, director)
+ *    - OMDb / IMDb API (Rotten Tomatoes scores, awards, IMDb ratings, age ratings)
+ *    - Streaming Sources Knowledge Graph (Netflix, Apple TV+, Disney+, HBO, Amazon Prime, Paramount+)
+ *
+ * 2. TIER 2 (AI Booster — OPT-IN / ADMIN TOGGLED ONLY):
+ *    - Gemini / Groq Pool fills remaining untranslated or unclassified gaps
  */
 export class CategorizerService {
   private tmdb: TmdbService;
+  private imdb: ImdbService;
+  private cinemeta: CinemetaService;
   private generator: CategoryGeneratorService;
 
   constructor() {
     this.tmdb = new TmdbService();
+    this.imdb = new ImdbService();
+    this.cinemeta = CinemetaService.getInstance();
     this.generator = new CategoryGeneratorService();
   }
 
@@ -59,11 +70,180 @@ export class CategorizerService {
   }
 
   /**
-   * Cooperative Missing-Fields Sync:
-   * 1. Tags streaming originals across database
-   * 2. Identifies titles missing Arabic metadata, studios, or keywords
-   * 3. Uses AI (Gemini/Groq) to fill those gaps when keys are available
-   * 4. Regenerates dynamic home categories
+   * TIER 1: Non-AI Multi-Engine Gap Resolver (Deterministic & Free)
+   * Resolves missing tagline, tagline_ar, title_ar, overview_ar, director, cast, trailer, awards, studios
+   * using Wikipedia, Cinemeta, OMDB, TMDB Arabic & Streaming Knowledge Graph.
+   */
+  async resolveGapsWithNonAiEngines(movie: any, supabase: any): Promise<boolean> {
+    try {
+      const updates: any = {};
+      let modified = false;
+
+      const title = movie.title || '';
+      const tmdbTitle = movie.tmdb_title || '';
+      const effectiveTitle = tmdbTitle || this.cleanTitle(title);
+      const year = movie.year || (movie.release_date || '').slice(0, 4);
+
+      // 1. ARABIC METADATA RESOLUTION (TMDB ar-SA + WIKIPEDIA ARABIC FALLBACK)
+      const needsArabic = !movie.title_ar || !movie.overview_ar || !movie.tagline_ar;
+      if (needsArabic && movie.tmdb_id) {
+        try {
+          const arMeta = await this.tmdb.getArabicMetadata(movie.tmdb_id, effectiveTitle);
+          if (!movie.title_ar && arMeta.titleAr) {
+            updates.title_ar = arMeta.titleAr;
+            modified = true;
+          }
+          if (!movie.overview_ar && arMeta.overviewAr) {
+            updates.overview_ar = arMeta.overviewAr;
+            modified = true;
+          }
+          if (!movie.tagline_ar && arMeta.taglineAr) {
+            updates.tagline_ar = arMeta.taglineAr;
+            modified = true;
+          }
+          if (!movie.cast_json_ar && arMeta.castJsonAr && arMeta.castJsonAr.length > 0) {
+            updates.cast_json_ar = arMeta.castJsonAr;
+            modified = true;
+          }
+        } catch {}
+      }
+
+      // If title_ar still missing, query Wikipedia Arabic directly
+      if (!movie.title_ar && !updates.title_ar && effectiveTitle) {
+        try {
+          const wikiArabic = await this.tmdb.getWikipediaArabicTitle(effectiveTitle);
+          if (wikiArabic) {
+            updates.title_ar = wikiArabic;
+            modified = true;
+          }
+        } catch {}
+      }
+
+      // 2. ENGLISH TAGLINE, DIRECTOR, CAST, TRAILER, KEYWORDS (TMDB DETAILS FALLBACK)
+      const needsDetails = !movie.tagline || !movie.director || !movie.trailer_url || !movie.keywords_json || (Array.isArray(movie.keywords_json) && movie.keywords_json.length === 0);
+      if (needsDetails && movie.tmdb_id) {
+        try {
+          const details = await this.tmdb.getMovieDetails(movie.tmdb_id);
+          if (details) {
+            if (!movie.tagline && details.tagline) {
+              updates.tagline = details.tagline;
+              modified = true;
+            }
+            if (!movie.director && details.credits?.crew) {
+              const dir = details.credits.crew.find((c: any) => c.job === 'Director');
+              if (dir?.name) {
+                updates.director = dir.name;
+                modified = true;
+              }
+            }
+            if ((!movie.cast_json || (Array.isArray(movie.cast_json) && movie.cast_json.length === 0)) && details.credits?.cast) {
+              updates.cast_json = details.credits.cast.slice(0, 12).map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                character: c.character,
+                profile_path: c.profile_path,
+              }));
+              modified = true;
+            }
+            if (!movie.trailer_url && details.videos?.results) {
+              const trailer = details.videos.results.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
+              if (trailer?.key) {
+                updates.trailer_key = trailer.key;
+                updates.trailer_site = 'YouTube';
+                updates.trailer_url = `https://www.youtube.com/watch?v=${trailer.key}`;
+                modified = true;
+              }
+            }
+            if ((!movie.keywords_json || (Array.isArray(movie.keywords_json) && movie.keywords_json.length === 0)) && details.keywords?.keywords) {
+              updates.keywords_json = details.keywords.keywords;
+              modified = true;
+            }
+            if (details.imdb_id && !movie.imdb_id) {
+              updates.imdb_id = details.imdb_id;
+              modified = true;
+            }
+          }
+        } catch {}
+      }
+
+      // 3. CINEMETA STREMIO CDN & OMDB (AWARDS, IMDB RATINGS, RUNTIME FALLBACK)
+      const targetImdbId = updates.imdb_id || movie.imdb_id;
+      if (targetImdbId && targetImdbId.startsWith('tt')) {
+        try {
+          const [cinemetaMeta, omdbData] = await Promise.all([
+            (!movie.director || !movie.overview) ? this.cinemeta.getMeta(targetImdbId).catch(() => null) : null,
+            this.imdb.getImdbData(targetImdbId).catch(() => null),
+          ]);
+
+          if (cinemetaMeta) {
+            if (!movie.director && !updates.director && cinemetaMeta.director && cinemetaMeta.director.length > 0) {
+              updates.director = cinemetaMeta.director[0];
+              modified = true;
+            }
+            if (!movie.overview && cinemetaMeta.description) {
+              updates.overview = cinemetaMeta.description;
+              modified = true;
+            }
+          }
+
+          if (omdbData) {
+            // Fill awards / rotten tomatoes score if columns exist
+            if (omdbData.awards && !movie.awards) {
+              updates.awards = omdbData.awards;
+              modified = true;
+            }
+          }
+        } catch {}
+      }
+
+      // 4. STREAMING ORIGINALS KNOWLEDGE GRAPH TAGGING
+      const streamingSources = StreamingSourcesService.getInstance();
+      await streamingSources.initialize();
+      const match = streamingSources.matchOriginal(title, tmdbTitle, year);
+      if (match) {
+        let studios = Array.isArray(movie.studios_json) ? [...movie.studios_json] : [];
+        if (!studios.some((s: any) => s.id === match.studioId)) {
+          studios.push({
+            id: match.studioId,
+            name: match.studioName,
+            logo_path: match.logoPath,
+            origin_country: 'US',
+          });
+          updates.studios_json = studios;
+          modified = true;
+        }
+      }
+
+      if (modified && Object.keys(updates).length > 0) {
+        updates.enriched_at = new Date().toISOString();
+        const { error: updErr } = await supabase
+          .from('movies')
+          .update(updates)
+          .eq('id', movie.id);
+
+        if (!updErr) return true;
+        
+        // Safe retry without unknown columns (e.g. awards)
+        if (updErr && /awards|cast_json_ar/i.test(updErr.message)) {
+          delete updates.awards;
+          delete updates.cast_json_ar;
+          const retryRes = await supabase.from('movies').update(updates).eq('id', movie.id);
+          return !retryRes.error;
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Cooperative Multi-Engine Sync:
+   * 1. Multi-Source Streaming Originals Sync
+   * 2. Non-AI Multi-Engine Gap Filling (TMDB Arabic + Wikipedia + Cinemeta + OMDB + Tagline resolution)
+   * 3. AI Booster (Gemini / Groq) ONLY if enabled by admin
+   * 4. Dynamic Category Generation & Publishing
    */
   async syncUncategorizedMovies(
     batchSize: number = 100,
@@ -71,70 +251,64 @@ export class CategorizerService {
   ): Promise<{ processed: number; updated: number; gapsIdentified: number }> {
     const supabase = SupabaseService.getClient();
 
-    console.log('[CATEGORIZER] Running cooperative multi-engine metadata audit...');
+    console.log('[CATEGORIZER] 🌐 Running cooperative multi-engine metadata audit...');
 
     // 1. Tag streaming originals across database
     const originalsResult = await this.syncMultiSourceStreamingOriginals(batchSize);
 
-    // 2. Identify gap titles requiring enrichment
+    // 2. Identify gap titles (missing tagline, Arabic, studios, keywords, director)
     const { data: gapMovies, count: totalGaps } = await supabase
       .from('movies')
-      .select('id, title, tmdb_id, title_ar, overview_ar, studios_json, keywords_json', { count: 'exact' })
-      .or('title_ar.is.null,overview_ar.is.null,studios_json.is.null,studios_json.eq.[]')
+      .select('id, title, tmdb_title, tmdb_id, imdb_id, year, release_date, tagline, tagline_ar, title_ar, overview_ar, director, cast_json, cast_json_ar, keywords_json, studios_json, trailer_url', { count: 'exact' })
+      .or('title_ar.is.null,overview_ar.is.null,tagline.is.null,tagline_ar.is.null,studios_json.is.null,studios_json.eq.[]')
       .order('popularity', { ascending: false, nullsFirst: false })
       .limit(batchSize);
 
     const gapsCount = totalGaps || gapMovies?.length || 0;
+    let nonAiUpdated = 0;
 
-    // 3. Attempt cooperative AI gap-fill if AI keys are configured
-    let gapsFilled = 0;
-    if (gapsCount > 0) {
-      try {
-        const { GeminiPoolService } = await import('./gemini_pool.service');
-        const pool = GeminiPoolService.getInstance();
-        const metrics = pool.getPoolMetrics();
-        const hasAiKeys = metrics.totalKeys > 0 || (metrics.groq?.isConfigured ?? false);
-
-        if (hasAiKeys && pool.isAiEnabled() && !metrics.cooperativeScan.isRunning) {
-          console.log(`[CATEGORIZER] 🧠 ${gapsCount} movies missing fields. Launching AI cooperative gap-fill...`);
-          await pool.startCooperativeGapScan({ maxTitles: Math.min(gapsCount, batchSize) });
-
-          // Wait for gap scan to finish (with timeout)
-          const maxWait = Math.min(batchSize * 2000, 300000);
-          const start = Date.now();
-          while (Date.now() - start < maxWait) {
-            const status = pool.getPoolMetrics().cooperativeScan;
-            if (!status.isRunning) break;
-            await new Promise((r) => setTimeout(r, 3000));
-          }
-          gapsFilled = pool.getPoolMetrics().cooperativeScan.enriched;
-        } else if (hasAiKeys && metrics.cooperativeScan.isRunning) {
-          console.log(`[CATEGORIZER] ℹ️ AI gap-scan already in progress. ${gapsCount} gaps pending.`);
-        } else {
-          console.log(`[CATEGORIZER] ℹ️ No AI keys configured. ${gapsCount} gap titles identified but skipping AI fill.`);
-        }
-      } catch (err: any) {
-        console.warn('[CATEGORIZER] AI gap-fill error (non-fatal):', err.message);
-      }
+    // 3. RUN TIER 1 NON-AI MULTI-ENGINE RESOLVER (Always active, free, deterministic)
+    if (gapMovies && gapMovies.length > 0) {
+      console.log(`[CATEGORIZER] 🔍 Running Tier 1 Multi-Engine (Wikipedia, Cinemeta, OMDB, TMDB Arabic) on ${gapMovies.length} gap titles...`);
+      const results = await this.pMap(gapMovies, 8, (m) => this.resolveGapsWithNonAiEngines(m, supabase));
+      nonAiUpdated = results.filter(Boolean).length;
+      console.log(`[CATEGORIZER] ✅ Tier 1 Non-AI resolution complete: ${nonAiUpdated}/${gapMovies.length} titles enriched.`);
     }
 
-    console.log(`[CATEGORIZER] ✅ Cooperative audit complete: ${originalsResult.tagged} originals tagged, ${gapsFilled} gaps filled by AI, ${gapsCount} total gaps identified.`);
+    // 4. RUN TIER 2 AI BOOSTER (Gemini / Groq) — ONLY if explicitly enabled by admin
+    let aiUpdated = 0;
+    try {
+      const { GeminiPoolService } = await import('./gemini_pool.service');
+      const pool = GeminiPoolService.getInstance();
+      const metrics = pool.getPoolMetrics();
+      const hasAiKeys = metrics.totalKeys > 0 || (metrics.groq?.isConfigured ?? false);
 
-    // 4. Regenerate dynamic home categories
+      if (hasAiKeys && pool.isAiEnabled() && !metrics.cooperativeScan.isRunning) {
+        console.log(`[CATEGORIZER] 🧠 Admin AI Boost is ENABLED. Launching AI gap-fill for remaining gaps...`);
+        await pool.startCooperativeGapScan({ maxTitles: Math.min(gapsCount, batchSize) });
+        aiUpdated = pool.getPoolMetrics().cooperativeScan.enriched;
+      } else if (!pool.isAiEnabled()) {
+        console.log(`[CATEGORIZER] 🔒 AI Gap-Fill is DISABLED by admin. Non-AI Tier 1 handled ${nonAiUpdated} titles successfully.`);
+      }
+    } catch (err: any) {
+      console.warn('[CATEGORIZER] AI boost check notice:', err.message);
+    }
+
+    // 5. Regenerate dynamic home categories
     await this.generator.generateAndSyncCategories().catch((e) => {
       console.error('[CATEGORIZER] Error syncing categories:', e.message);
     });
 
     return {
-      processed: originalsResult.processed,
-      updated: originalsResult.tagged + gapsFilled,
+      processed: originalsResult.processed + (gapMovies?.length || 0),
+      updated: originalsResult.tagged + nonAiUpdated + aiUpdated,
       gapsIdentified: gapsCount,
     };
   }
 
   /// Fast multi-source knowledge graph sync across titles in Supabase
   async syncMultiSourceStreamingOriginals(batchSize: number = 200): Promise<{ processed: number; tagged: number }> {
-    const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
+    const streamingSources = StreamingSourcesService.getInstance();
     await streamingSources.initialize();
 
     const supabase = SupabaseService.getClient();
