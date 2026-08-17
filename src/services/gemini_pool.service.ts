@@ -135,15 +135,22 @@ export class GeminiPoolService {
     console.log(`[GEMINI_POOL] 🤖 Initialized Gemini AI Pool with ${this.keyPool.length} keys (Model: ${this.model})`);
   }
 
-  /// Selects the best healthy key with lowest RPM usage
+  private roundRobinCursor = 0;
+
+  /// Selects the next healthy key in round-robin sequence with lowest RPM load
   private getBestKey(): { key: string; index: number } | null {
     const now = Date.now();
-    let bestKey: string | null = null;
-    let lowestRpm = Infinity;
-    let bestIndex = -1;
+    const len = this.keyPool.length;
+    if (len === 0) return null;
 
-    for (let i = 0; i < this.keyPool.length; i++) {
-      const k = this.keyPool[i];
+    let bestKey: string | null = null;
+    let bestIndex = -1;
+    let lowestRpm = Infinity;
+
+    // Check all keys starting from roundRobinCursor to distribute traffic equally
+    for (let offset = 0; offset < len; offset++) {
+      const idx = (this.roundRobinCursor + offset) % len;
+      const k = this.keyPool[idx];
       const stat = this.keyStats.get(k)!;
 
       // Clean old timestamps (>60s)
@@ -158,14 +165,25 @@ export class GeminiPoolService {
       if (stat.status === 'invalid' || stat.status === 'exhausted') continue;
       if (stat.cooldownUntil && now < stat.cooldownUntil) continue;
 
+      // If key has low RPM (< 10), pick it immediately in round-robin order
+      if (stat.rpmTimestamps.length < 10) {
+        this.roundRobinCursor = (idx + 1) % len;
+        return { key: k, index: idx };
+      }
+
       if (stat.rpmTimestamps.length < lowestRpm) {
         lowestRpm = stat.rpmTimestamps.length;
         bestKey = k;
-        bestIndex = i;
+        bestIndex = idx;
       }
     }
 
-    return bestKey ? { key: bestKey, index: bestIndex } : null;
+    if (bestKey && bestIndex >= 0) {
+      this.roundRobinCursor = (bestIndex + 1) % len;
+      return { key: bestKey, index: bestIndex };
+    }
+
+    return null;
   }
 
   /// Generates a structured JSON completion with multi-key rotation and auto-retry
@@ -228,9 +246,9 @@ export class GeminiPoolService {
         const msg = err.response?.data?.error?.message || err.message;
 
         if (status === 429 || /quota|resource_exhausted/i.test(msg)) {
-          console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 60s. Auto-rotating...`);
+          console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 180s. Auto-rotating...`);
           stat.status = 'cooldown';
-          stat.cooldownUntil = Date.now() + 60000;
+          stat.cooldownUntil = Date.now() + 180000;
         } else if (status === 400 || status === 403 || /api_key_invalid|no longer available/i.test(msg)) {
           console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid: ${msg}`);
           stat.status = 'invalid';
