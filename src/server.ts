@@ -275,6 +275,35 @@ app.get('/api/ai/pool', async (_req: Request, res: Response) => {
   }
 });
 
+// 16b. Get Supported Gemini Models & Active Selection
+app.get('/api/ai/models', async (_req: Request, res: Response) => {
+  try {
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const data = GeminiPoolService.getInstance().getSupportedModels();
+    res.status(200).json({ success: true, ...data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 16c. Dynamically Switch Active Gemini Model via Admin Control
+app.post('/api/ai/model', async (req: Request, res: Response) => {
+  try {
+    const model = req.body?.model || req.query?.model as string;
+    if (!model) {
+      return res.status(400).json({ success: false, error: 'Missing model parameter in request body' });
+    }
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const result = GeminiPoolService.getInstance().setModel(model);
+    res.status(200).json({
+      message: `Active Gemini Model successfully switched to: ${result.label}`,
+      ...result,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 17. Toggle AI Enrichment in Standard Runtime Auto-Scanner (Enable / Disable)
 app.post('/api/ai/toggle', async (req: Request, res: Response) => {
   try {

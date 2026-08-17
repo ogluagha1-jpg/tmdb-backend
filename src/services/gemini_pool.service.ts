@@ -34,6 +34,30 @@ export interface DiscoveredCategory {
   curation_reason: string;
 }
 
+export const SUPPORTED_GEMINI_MODELS: Record<string, { label: string; description: string; isDefault?: boolean }> = {
+  'gemini-2.5-flash': {
+    label: 'Gemini 2.5 Flash (Stable)',
+    description: 'Ultra-fast, accurate metadata enrichment & Arabic translation (Default)',
+    isDefault: true,
+  },
+  'gemini-2.5-flash-lite': {
+    label: 'Gemini 2.5 Flash-Lite (Fast & Budget)',
+    description: 'Lightweight & budget-optimized for high-throughput batch processing',
+  },
+  'gemini-3.1-flash-lite': {
+    label: 'Gemini 3.1 Flash-Lite (Stable)',
+    description: 'Next-gen high-efficiency model with strong structured JSON formatting',
+  },
+  'gemini-3.5-flash': {
+    label: 'Gemini 3.5 Flash (Latest)',
+    description: 'Flagship speed & intelligence with high contextual depth',
+  },
+  'gemini-2.5-pro': {
+    label: 'Gemini 2.5 Pro (High Reasoning)',
+    description: 'Advanced reasoning for nuanced cultural translation & category curation',
+  },
+};
+
 export class GeminiPoolService {
   private static instance: GeminiPoolService;
 
@@ -68,14 +92,16 @@ export class GeminiPoolService {
   private totalAiSuccess = 0;
   private totalAiErrors = 0;
 
-  // Selected stable model (supports override via GEMINI_MODEL)
-  private model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+  // Active Gemini Model (Default: gemini-2.5-flash as used in AI MED TRANSCRIB)
+  private model: string = 'gemini-2.5-flash';
 
   // Candidate models in fallback order
-  private candidateModels = [
-    process.env.GEMINI_MODEL || 'gemini-flash-latest',
-    'gemini-3.6-flash',
+  private candidateModels: string[] = [
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-3.1-flash-lite',
     'gemini-3.5-flash',
+    'gemini-2.5-pro',
   ];
 
   // ── 🦙 Groq Open-Source Fallback Pool (Llama 3.3 70B / 3.1 8B) ──
@@ -129,7 +155,61 @@ export class GeminiPoolService {
     return this.isAiEnrichmentEnabled;
   }
 
+  /// Normalizes model names and maps deprecated/legacy aliases to active counterparts
+  public normalizeModel(inputModel?: string): string {
+    let m = (inputModel || '').trim();
+    if (m === 'gemini-2.0-flash' || m === 'gemini-1.5-flash' || m === 'gemini-flash-latest' || !m) {
+      m = 'gemini-2.5-flash';
+    } else if (m === 'gemini-3.1-flash-lite-preview') {
+      m = 'gemini-3.1-flash-lite';
+    } else if (m === 'gemini-3-flash-preview' || m === 'gemini-3.6-flash') {
+      m = 'gemini-3.5-flash';
+    }
+
+    if (!SUPPORTED_GEMINI_MODELS[m]) {
+      m = 'gemini-2.5-flash';
+    }
+    return m;
+  }
+
+  public getModel(): string {
+    return this.model;
+  }
+
+  public setModel(newModel: string): { success: boolean; model: string; label: string; description: string } {
+    const validated = this.normalizeModel(newModel);
+    this.model = validated;
+
+    // Reorder candidateModels so chosen model is primary
+    const otherCandidates = Object.keys(SUPPORTED_GEMINI_MODELS).filter((m) => m !== validated);
+    this.candidateModels = [validated, ...otherCandidates];
+
+    const meta = SUPPORTED_GEMINI_MODELS[validated] || {
+      label: validated,
+      description: 'Gemini Model',
+    };
+
+    console.log(`[GEMINI_POOL] 🎯 Active Gemini Model switched to: ${validated} (${meta.label})`);
+    return {
+      success: true,
+      model: validated,
+      label: meta.label,
+      description: meta.description,
+    };
+  }
+
+  public getSupportedModels() {
+    return {
+      activeModel: this.model,
+      defaultModel: 'gemini-2.5-flash',
+      supportedModels: SUPPORTED_GEMINI_MODELS,
+    };
+  }
+
   private initializePool(): void {
+    const configuredModel = this.normalizeModel(process.env.GEMINI_MODEL || 'gemini-2.5-flash');
+    this.setModel(configuredModel);
+
     const raw = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').trim();
 
     // Support comma-separated, newline-separated, semicolon-separated, and strip any quotes/spaces
@@ -586,6 +666,8 @@ Respond ONLY in valid JSON conforming to this schema:
     totalSuccess: number;
     totalErrors: number;
     model: string;
+    defaultModel?: string;
+    supportedModels?: Record<string, { label: string; description: string; isDefault?: boolean }>;
     isAiEnabled: boolean;
     groq?: {
       isConfigured: boolean;
@@ -665,6 +747,8 @@ Respond ONLY in valid JSON conforming to this schema:
       totalSuccess: this.totalAiSuccess,
       totalErrors: this.totalAiErrors,
       model: this.model,
+      defaultModel: 'gemini-2.5-flash',
+      supportedModels: SUPPORTED_GEMINI_MODELS,
       isAiEnabled: this.isAiEnrichmentEnabled,
       groq: {
         isConfigured: this.groqKeyPool.length > 0,

@@ -810,6 +810,26 @@ export function renderDashboardHtml(): string {
           </div>
         </div>
 
+        <!-- Gemini Model Selection & Admin Control Bar -->
+        <div style="margin-top: 14px; padding: 10px 14px; border-radius: 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(99, 102, 241, 0.3); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span style="font-size: 12px; font-weight: 800; color: #818CF8; display: flex; align-items: center; gap: 6px;">
+              🤖 Active Gemini Engine:
+            </span>
+            <select id="select-gemini-model" onchange="window.changeGeminiModel(this.value)" style="padding: 6px 12px; font-size: 12px; font-weight: 700; background: #0B0F17; border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 8px; color: #F8FAFC; cursor: pointer; outline: none;">
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Stable) - Default</option>
+              <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Fast & Budget)</option>
+              <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (Stable)</option>
+              <option value="gemini-3.5-flash">Gemini 3.5 Flash (Latest)</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro (High Reasoning)</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="gemini-model-desc-badge" style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Default: Gemini 2.5 Flash</span>
+            <span class="status-badge" style="font-size: 10px; padding: 2px 7px; background: rgba(16, 185, 129, 0.15); color: #10B981;">Live Admin Control</span>
+          </div>
+        </div>
+
         <!-- Live Cooperative AI Gap-Scan Progress Box -->
         <div id="ai-gap-progress-box" style="margin-top: 14px; padding: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(99, 102, 241, 0.25);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px;">
@@ -1451,6 +1471,16 @@ export function renderDashboardHtml(): string {
 
           safeSetText('ai-pool-badge', aiPool.healthyKeys + ' / ' + aiPool.totalKeys + ' Gemini Keys (' + aiPool.model + ')');
 
+          // Sync Active Gemini Model in dropdown
+          const selectModel = document.getElementById('select-gemini-model');
+          if (selectModel && aiPool.model && selectModel.value !== aiPool.model) {
+            selectModel.value = aiPool.model;
+          }
+          const descBadge = document.getElementById('gemini-model-desc-badge');
+          if (descBadge && aiPool.supportedModels && aiPool.supportedModels[aiPool.model]) {
+            descBadge.innerText = aiPool.supportedModels[aiPool.model].description;
+          }
+
           const groq = aiPool.groq;
           const groqBadge = document.getElementById('groq-badge');
           if (groqBadge) {
@@ -1754,6 +1784,32 @@ export function renderDashboardHtml(): string {
       }
     };
 
+    // ── Dynamic Gemini Model Selector Controller ──
+    window.changeGeminiModel = async function(modelName) {
+      if (!modelName) return;
+      try {
+        window.showToast('⏳ Switching active Gemini model to: ' + modelName + '...');
+        const res = await fetch('/api/ai/model', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: modelName }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.showToast('✅ ' + (data.message || 'Gemini model switched!'));
+          const descBadge = document.getElementById('gemini-model-desc-badge');
+          if (descBadge && data.description) {
+            descBadge.innerText = data.description;
+          }
+          setTimeout(window.fetchMetrics, 300);
+        } else {
+          window.showToast('❌ Model switch error: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        window.showToast('❌ Network error switching Gemini model');
+      }
+    };
+
     // ── AI Enriched Movies Inspector State & Functions ──
     let enrichedCurrentEngine = 'all';
     let enrichedCurrentSearch = '';
@@ -1929,6 +1985,7 @@ export function renderDashboardHtml(): string {
     window.toggleSection = window.toggleSection;
     window.expandAllSections = window.expandAllSections;
     window.collapseAllSections = window.collapseAllSections;
+    window.changeGeminiModel = window.changeGeminiModel;
 
     // Direct non-prefixed aliases for inline HTML onclick calls
     var fetchMetrics = window.fetchMetrics;
@@ -1957,6 +2014,7 @@ export function renderDashboardHtml(): string {
     var toggleSection = window.toggleSection;
     var expandAllSections = window.expandAllSections;
     var collapseAllSections = window.collapseAllSections;
+    var changeGeminiModel = window.changeGeminiModel;
 
     // Restore saved active tab (if any)
     const savedTab = localStorage.getItem('teraflix_active_tab') || 'operations';
