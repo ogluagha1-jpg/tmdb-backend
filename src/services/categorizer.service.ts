@@ -240,6 +240,49 @@ export class CategorizerService {
         }
       }
 
+      // ── TIER 4: GEMINI AI MULTI-KEY ENRICHMENT BOOSTER (ARABIC & STUDIO ATTRIBUTION) ──
+      const needsArabic = !movie.title_ar && !arMeta.titleAr;
+      const needsStudio = studiosJson.length === 0;
+      if (needsArabic || needsStudio) {
+        try {
+          const { GeminiPoolService } = await import('./gemini_pool.service');
+          const aiResult = await GeminiPoolService.getInstance().enrichMovieWithAi({
+            title: tmdbDetails?.title || movie.title,
+            cleanTitle: this.cleanTitle(movie.title),
+            year: year,
+            overview: tmdbDetails?.overview || cinemetaMeta?.description || movie.overview,
+            existingGenres: genresJson.map((g: any) => g.name),
+          });
+
+          if (aiResult) {
+            if (!arMeta.titleAr && aiResult.title_ar) arMeta.titleAr = aiResult.title_ar;
+            if (!arMeta.overviewAr && aiResult.overview_ar) arMeta.overviewAr = aiResult.overview_ar;
+            if (!arMeta.taglineAr && aiResult.tagline_ar) arMeta.taglineAr = aiResult.tagline_ar;
+
+            // Merge AI studio if missing
+            if (studiosJson.length === 0 && aiResult.primary_studio && aiResult.studio_id) {
+              studiosJson.push({
+                id: aiResult.studio_id,
+                name: aiResult.primary_studio,
+                logo_path: null,
+                origin_country: 'US',
+              });
+            }
+
+            // Merge AI thematic micro-genres
+            if (Array.isArray(aiResult.thematic_keywords)) {
+              aiResult.thematic_keywords.forEach((kw: string, idx: number) => {
+                if (!keywordsJson.some((k: any) => k.name.toLowerCase() === kw.toLowerCase())) {
+                  keywordsJson.push({ id: 899000 + idx, name: kw });
+                }
+              });
+            }
+          }
+        } catch (aiErr: any) {
+          console.warn(`[CATEGORIZER] Gemini AI booster skipped for #${movie.id}:`, aiErr.message);
+        }
+      }
+
       // ── BUILD CORE SERVER PAYLOAD (ARABIC LOCALIZATION, STUDIOS, & CATEGORIES METADATA) ──
       const updatePayload: any = {
         tmdb_id: tmdbDetails?.id || movie.tmdb_id,

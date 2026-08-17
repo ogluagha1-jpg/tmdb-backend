@@ -48,6 +48,7 @@ export interface DashboardMetrics {
     y2024: { translated: number; total: number; pct: number };
     modernEra: { translated: number; total: number; pct: number };
   };
+  aiPool?: any;
   studios: StudioMetric[];
   categories: CategoryMetric[];
 }
@@ -199,6 +200,12 @@ export class MetricsService {
       }));
     } catch (_) {}
 
+    let aiPoolMetrics: any = null;
+    try {
+      const { GeminiPoolService } = await import('./gemini_pool.service');
+      aiPoolMetrics = GeminiPoolService.getInstance().getPoolMetrics();
+    } catch (_) {}
+
     return {
       server: {
         status: 'Healthy & Operational',
@@ -227,6 +234,7 @@ export class MetricsService {
         y2024: { translated: y2024Trans, total: y2024Tot, pct: y2024Tot > 0 ? parseFloat(((y2024Trans / y2024Tot) * 100).toFixed(1)) : 0 },
         modernEra: { translated: modernTrans, total: modernTot, pct: modernTot > 0 ? parseFloat(((modernTrans / modernTot) * 100).toFixed(1)) : 0 },
       },
+      aiPool: aiPoolMetrics,
       studios: studioCounts,
       categories: publishedCategories,
     };

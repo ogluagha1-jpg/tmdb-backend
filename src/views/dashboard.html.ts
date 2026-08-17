@@ -741,6 +741,31 @@ export function renderDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- 🤖 GEMINI AI MULTI-KEY POOL CARD 🤖 -->
+    <div class="card" style="margin-bottom: 20px; border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.08));">
+      <div class="card-title-row" style="flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🤖</div>
+          <div>
+            <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+              Gemini AI Multi-Key Pool & Neural Localization
+              <span id="ai-pool-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
+                16 Keys Active
+              </span>
+            </h2>
+            <p class="card-desc">Auto-rotates across healthy keys with 429 automatic failover for Arabic localization, authentic studios & micro-genres</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="window.triggerAiTest()" style="background: linear-gradient(135deg, #6366F1, #4F46E5); font-weight: 700;">⚡ Test AI Pool</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 14px;" id="ai-keys-container">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+
     <!-- Major Studios Breakdown Grid -->
     <div class="card" style="margin-bottom: 20px;">
       <div class="card-title-row">
@@ -999,6 +1024,35 @@ export function renderDashboardHtml(): string {
           });
         }
 
+        // 6. Gemini AI Pool
+        const aiContainer = document.getElementById('ai-keys-container');
+        const aiPool = d.aiPool;
+        if (aiPool) {
+          safeSetText('ai-pool-badge', aiPool.healthyKeys + ' / ' + aiPool.totalKeys + ' Healthy (' + aiPool.model + ')');
+          if (aiContainer && Array.isArray(aiPool.keys)) {
+            aiContainer.innerHTML = '';
+            aiPool.keys.forEach(k => {
+              const div = document.createElement('div');
+              div.className = 'studio-pill';
+              div.style.padding = '8px 12px';
+              const isHealthy = k.status === 'healthy';
+              const statusColor = isHealthy ? '#10B981' : (k.status === 'cooldown' ? '#F59E0B' : '#EF4444');
+              div.innerHTML =
+                '<div>' +
+                  '<div style="font-size: 12px; font-weight: 700; color: white; display: flex; align-items: center; gap: 6px;">' +
+                    '<span style="width: 7px; height: 7px; border-radius: 50%; background: ' + statusColor + '; display: inline-block;"></span>' +
+                    'Key #' + k.index + ' <span style="font-size: 10px; color: var(--text-muted); font-family: monospace;">(' + k.keyMasked + ')</span>' +
+                  '</div>' +
+                  '<div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">' +
+                    'RPM: ' + k.rpmCount + '/15 • Total: ' + k.totalSuccess +
+                  '</div>' +
+                '</div>' +
+                '<div class="studio-count-badge" style="color: ' + statusColor + '; font-size: 10px; text-transform: uppercase;">' + k.status + '</div>';
+              aiContainer.appendChild(div);
+            });
+          }
+        }
+
         const tbody = document.getElementById('categories-tbody');
         const cats = d.categories || [];
         safeSetText('categories-count-badge', cats.length + ' Published Shelves');
@@ -1144,6 +1198,26 @@ export function renderDashboardHtml(): string {
       }
     };
 
+    window.triggerAiTest = async function() {
+      window.showToast('🤖 Testing Gemini AI Pool (Model: gemini-2.5-flash)...');
+      try {
+        const res = await fetch('/api/ai/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: 'Inception', year: 2010 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.showToast('✨ AI Success: ' + (data.result?.title_ar || 'Enriched') + ' • Studio: ' + (data.result?.primary_studio || 'Recognized'));
+        } else {
+          window.showToast('⚠️ AI response: ' + (data.message || 'Error'));
+        }
+        setTimeout(window.fetchMetrics, 500);
+      } catch (err) {
+        window.showToast('❌ AI Test failed: ' + err.message);
+      }
+    };
+
     // Global aliases
     window.fetchMetrics = window.fetchMetrics;
     window.fetchScannerStatus = window.fetchScannerStatus;
@@ -1153,6 +1227,7 @@ export function renderDashboardHtml(): string {
     window.triggerMovieSync = window.triggerMovieSync;
     window.triggerResetAndRescan = window.triggerResetAndRescan;
     window.triggerRegenerateCategories = window.triggerRegenerateCategories;
+    window.triggerAiTest = window.triggerAiTest;
     window.openCreateModal = window.openCreateModal;
     window.closeCreateModal = window.closeCreateModal;
 
@@ -1165,6 +1240,7 @@ export function renderDashboardHtml(): string {
     var triggerMovieSync = window.triggerMovieSync;
     var triggerResetAndRescan = window.triggerResetAndRescan;
     var triggerRegenerateCategories = window.triggerRegenerateCategories;
+    var triggerAiTest = window.triggerAiTest;
     var openCreateModal = window.openCreateModal;
     var closeCreateModal = window.closeCreateModal;
     var applyPreset = window.applyPreset;

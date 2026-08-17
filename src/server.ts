@@ -225,6 +225,43 @@ app.post('/api/scan/reset', async (_req: Request, res: Response) => {
   }
 });
 
+// 15. Test Gemini AI Pool Execution
+app.post('/api/ai/test', async (req: Request, res: Response) => {
+  try {
+    const title = (req.body?.title as string) || (req.query?.title as string) || 'Inception';
+    const year = req.body?.year || req.query?.year || 2010;
+    const overview = req.body?.overview || 'A thief who steals corporate secrets through dream-sharing technology...';
+
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const result = await GeminiPoolService.getInstance().enrichMovieWithAi({
+      title,
+      year,
+      overview,
+    });
+
+    const poolMetrics = GeminiPoolService.getInstance().getPoolMetrics();
+    res.status(200).json({
+      success: !!result,
+      message: result ? `AI successfully enriched "${title}"!` : 'AI enrichment failed',
+      result,
+      pool: poolMetrics,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 16. Get Gemini AI Pool Health
+app.get('/api/ai/pool', async (_req: Request, res: Response) => {
+  try {
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const pool = GeminiPoolService.getInstance().getPoolMetrics();
+    res.status(200).json({ success: true, pool });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 const server = app.listen(port, () => {
