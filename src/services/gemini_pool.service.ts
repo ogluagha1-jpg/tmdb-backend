@@ -646,20 +646,29 @@ Respond ONLY in valid JSON matching this schema:
       };
     }
 
+    // 1. Cleanly delete previous AI-generated dynamic categories so shelves never pile up/overload
+    const { error: delErr } = await supabase
+      .from('home_categories')
+      .delete()
+      .like('id', 'ai_%');
+
+    if (delErr) {
+      console.warn('[GEMINI_CATEGORY_DISCOVERY] Warning deleting old AI categories:', delErr.message);
+    } else {
+      console.log('[GEMINI_CATEGORY_DISCOVERY] 🧹 Purged previous AI shelves to make room for fresh discoveries.');
+    }
+
     const { env } = await import('../config/env');
     const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
     const published: any[] = [];
 
-    // Get max sort_order from existing categories
-    const { data: existingCats } = await supabase
-      .from('home_categories')
-      .select('sort_order')
-      .order('sort_order', { ascending: false })
-      .limit(1);
+    // Base sort order for AI dynamic shelves
+    let nextSortOrder = 100;
 
-    let nextSortOrder = (existingCats && existingCats[0]?.sort_order ? existingCats[0].sort_order : 30) + 1;
+    // Limit to top 5 highest-converting categories to prevent overload
+    const candidates = aiRes.categories.slice(0, 5);
 
-    for (const cat of aiRes.categories) {
+    for (const cat of candidates) {
       try {
         let countUrl = `${env.SUPABASE_URL}/rest/v1/movies?select=id`;
         if (cat.filter_query) {
@@ -679,7 +688,8 @@ Respond ONLY in valid JSON matching this schema:
         const contentRange = countRes.headers['content-range'];
         const total = contentRange ? parseInt(contentRange.split('/')[1], 10) : 0;
 
-        if (total >= 4) {
+        // Require at least 5 matching movies
+        if (total >= 5) {
           const payload = {
             id: cat.id,
             title: cat.title,
@@ -694,13 +704,13 @@ Respond ONLY in valid JSON matching this schema:
             updated_at: new Date().toISOString(),
           };
 
-          const { error: upsertErr } = await supabase
+          const { error: insertErr } = await supabase
             .from('home_categories')
             .upsert(payload, { onConflict: 'id' });
 
-          if (!upsertErr) {
+          if (!insertErr) {
             published.push({ ...payload, curation_reason: cat.curation_reason });
-            console.log(`[GEMINI_CATEGORY_DISCOVERY] 🌟 Published AI Shelf: "${cat.title}" (${total} titles)`);
+            console.log(`[GEMINI_CATEGORY_DISCOVERY] 🌟 Published Fresh AI Shelf: "${cat.title}" (${total} titles)`);
           }
         }
       } catch (err: any) {
@@ -708,11 +718,31 @@ Respond ONLY in valid JSON matching this schema:
       }
     }
 
+    // 2. Re-index and normalize all sort_order sequences strictly 1..N
+    try {
+      const { data: allCats } = await supabase
+        .from('home_categories')
+        .select('id, sort_order')
+        .order('sort_order', { ascending: true });
+
+      if (allCats && allCats.length > 0) {
+        for (let i = 0; i < allCats.length; i++) {
+          await supabase
+            .from('home_categories')
+            .update({ sort_order: i + 1 })
+            .eq('id', allCats[i].id);
+        }
+        console.log(`[GEMINI_CATEGORY_DISCOVERY] 🔢 Normalized sort_order across all ${allCats.length} active categories.`);
+      }
+    } catch (normErr: any) {
+      console.warn('[GEMINI_CATEGORY_DISCOVERY] Error normalizing sort order:', normErr.message);
+    }
+
     return {
       success: true,
       discoveredCount: published.length,
       publishedCategories: published,
-      message: `AI Discovered and Published ${published.length} dynamic new home categories in realtime!`,
+      message: `Refreshed Home Screen: Replaced old AI shelves with ${published.length} fresh trending categories!`,
     };
   }
 }
