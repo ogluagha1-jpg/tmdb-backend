@@ -863,8 +863,20 @@ export function renderDashboardHtml(): string {
     <!-- TAB 2: 🎬 CATALOGUE & METADATA EXPLORER                  -->
     <!-- ========================================================= -->
     <div id="tab-content-catalogue" class="tab-content" style="display: none;">
+      <!-- Quick Expand / Collapse Toolbar -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">📚 Catalogue Explorer Modules</span>
+          <span class="status-badge" style="font-size: 10px; padding: 2px 7px;">Collapsed by Default</span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="expandAllSections()">📂 Expand All</button>
+          <button class="btn btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="collapseAllSections()">📁 Collapse All</button>
+        </div>
+      </div>
+
       <!-- Top 4 Summary Metrics -->
-      <div class="grid-4">
+      <div class="grid-4" style="margin-bottom: 16px;">
         <div class="card">
           <div class="card-title-row">
             <span class="card-label">Catalogue</span>
@@ -905,156 +917,183 @@ export function renderDashboardHtml(): string {
         </div>
       </div>
 
-      <!-- Translation Breakdown & Recent Releases -->
-      <div class="grid-2">
-        <!-- Arabic Detailed Breakdown -->
-        <div class="card">
-          <div class="card-title-row">
-            <h2 style="font-size: 14px; font-weight: 700;">Arabic Translation Coverage</h2>
-            <span class="card-label" id="val-arabic-unique-label">--</span>
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px;">
-            <div>
-              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-                <span>Official Titles (<code>title_ar</code>)</span>
-                <strong id="val-title-ar">--</strong>
-              </div>
-              <div class="progress-track">
-                <div id="prog-title-ar" class="progress-fill" style="width: 0%; background: #6366F1;"></div>
-              </div>
-            </div>
-
-            <div>
-              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-                <span>Overviews (<code>overview_ar</code>)</span>
-                <strong id="val-overview-ar">--</strong>
-              </div>
-              <div class="progress-track">
-                <div id="prog-overview-ar" class="progress-fill" style="width: 0%; background: #10B981;"></div>
-              </div>
-            </div>
-
-            <div>
-              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-                <span>Taglines (<code>tagline_ar</code>)</span>
-                <strong id="val-tagline-ar">--</strong>
-              </div>
-              <div class="progress-track">
-                <div id="prog-tagline-ar" class="progress-fill" style="width: 0%; background: #F59E0B;"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Recent Years Breakdown -->
-        <div class="card">
-          <div class="card-title-row">
-            <h2 style="font-size: 14px; font-weight: 700;">Recent Releases Translated</h2>
-            <span class="card-label">By Year</span>
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 6px;">
-            <div>
-              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-                <span>🔥 <strong>2026 Releases</strong> (Brand New)</span>
-                <strong id="val-y2026">--</strong>
-              </div>
-              <div class="progress-track">
-                <div id="prog-y2026" class="progress-fill" style="width: 0%; background: #E50914;"></div>
-              </div>
-            </div>
-
-            <div>
-              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-                <span>⭐ <strong>2025 Releases</strong></span>
-                <strong id="val-y2025">--</strong>
-              </div>
-              <div class="progress-track">
-                <div id="prog-y2025" class="progress-fill" style="width: 0%; background: #3B82F6;"></div>
-              </div>
-            </div>
-
-            <div>
-              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-                <span>✨ <strong>Modern Era</strong> (2020 – 2026)</span>
-                <strong id="val-modern">--</strong>
-              </div>
-              <div class="progress-track">
-                <div id="prog-modern" class="progress-fill" style="width: 0%; background: #8B5CF6;"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Major Studios Breakdown Grid -->
-      <div class="card" style="margin-bottom: 20px;">
-        <div class="card-title-row">
-          <div>
-            <h2 style="font-size: 15px; font-weight: 800;">Studio Hub Live Counters</h2>
-            <p class="card-desc">Titles accessible via Studio Hub watermark cards</p>
-          </div>
-        </div>
-        <div class="studios-grid" id="studios-container">
-          <!-- Injected via JavaScript -->
-        </div>
-      </div>
-
-      <!-- Active Home Categories Table -->
-      <div class="card" style="margin-bottom: 20px;">
-        <div class="card-title-row" style="flex-wrap: wrap; gap: 8px;">
-          <div>
-            <h2 style="font-size: 15px; font-weight: 800;">Active Published Home Categories</h2>
-            <p class="card-desc">Dynamic shelves active on mobile app</p>
-          </div>
-          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <button class="btn" onclick="window.triggerAiCategoryDiscovery()" style="background: linear-gradient(135deg, #10B981, #059669); font-size: 12px; font-weight: 700; color: white;">
-              ✨ AI Discover New Shelves
-            </button>
-            <div id="categories-count-badge" class="status-badge" style="background: rgba(99, 102, 241, 0.12); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
-              -- Published Shelves
-            </div>
-          </div>
-        </div>
-        <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px; display:flex; align-items:center; gap:4px;">
-          <span>👈 Scroll horizontally to see Arabic & details 👉</span>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>English Title</th>
-                <th>Arabic Title</th>
-                <th>Type</th>
-                <th>Live Titles</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="categories-tbody">
-              <!-- Injected via JavaScript -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 🎬 AI ENRICHED MOVIES & QUALITY INSPECTION HUB 🎬 -->
-      <div class="card" style="border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.05));">
-        <div class="card-title-row" style="flex-wrap: wrap; gap: 12px; align-items: center;">
+      <!-- MODULE 1: 🇸🇦 Arabic Translation Coverage Breakdown (Collapsible) -->
+      <div class="card" style="margin-bottom: 14px; padding: 0; overflow: hidden; border-color: rgba(16, 185, 129, 0.3);">
+        <div onclick="toggleSection('sec-arabic')" style="padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(16, 185, 129, 0.05); user-select: none;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 20px;">🎬</div>
+            <div class="card-icon" style="background: rgba(16, 185, 129, 0.15); color: #10B981; font-size: 18px;">🇸🇦</div>
             <div>
-              <h2 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+              <h2 style="font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                Arabic Translation Coverage Breakdown
+                <span class="status-badge" style="font-size: 10px; padding: 1px 6px; background: rgba(16, 185, 129, 0.15); color: #10B981;" id="val-arabic-unique-label">-- Titles</span>
+              </h2>
+              <p class="card-desc">Field metrics (titles, overviews, taglines) & release year coverage (2026, 2025, Modern Era)</p>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="sec-arabic-toggle-text" style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Click to Expand</span>
+            <span id="sec-arabic-icon" style="font-size: 13px; color: #10B981; transition: transform 0.25s ease;">▼</span>
+          </div>
+        </div>
+        <div id="sec-arabic-body" style="display: none; padding: 16px; border-top: 1px solid var(--border-subtle);">
+          <div class="grid-2" style="margin-bottom: 0;">
+            <!-- Arabic Fields -->
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <h3 style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">By Metadata Field</h3>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                  <span>Official Titles (<code>title_ar</code>)</span>
+                  <strong id="val-title-ar">--</strong>
+                </div>
+                <div class="progress-track">
+                  <div id="prog-title-ar" class="progress-fill" style="width: 0%; background: #6366F1;"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                  <span>Overviews (<code>overview_ar</code>)</span>
+                  <strong id="val-overview-ar">--</strong>
+                </div>
+                <div class="progress-track">
+                  <div id="prog-overview-ar" class="progress-fill" style="width: 0%; background: #10B981;"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                  <span>Taglines (<code>tagline_ar</code>)</span>
+                  <strong id="val-tagline-ar">--</strong>
+                </div>
+                <div class="progress-track">
+                  <div id="prog-tagline-ar" class="progress-fill" style="width: 0%; background: #F59E0B;"></div>
+                </div>
+              </div>
+            </div>
+            <!-- Release Years -->
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <h3 style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">By Release Year</h3>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                  <span>🔥 <strong>2026 Releases</strong> (Brand New)</span>
+                  <strong id="val-y2026">--</strong>
+                </div>
+                <div class="progress-track">
+                  <div id="prog-y2026" class="progress-fill" style="width: 0%; background: #E50914;"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                  <span>⭐ <strong>2025 Releases</strong></span>
+                  <strong id="val-y2025">--</strong>
+                </div>
+                <div class="progress-track">
+                  <div id="prog-y2025" class="progress-fill" style="width: 0%; background: #3B82F6;"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                  <span>✨ <strong>Modern Era</strong> (2020 – 2026)</span>
+                  <strong id="val-modern">--</strong>
+                </div>
+                <div class="progress-track">
+                  <div id="prog-modern" class="progress-fill" style="width: 0%; background: #8B5CF6;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODULE 2: 🏢 Studio Hub Live Counters (Collapsible) -->
+      <div class="card" style="margin-bottom: 14px; padding: 0; overflow: hidden; border-color: rgba(99, 102, 241, 0.3);">
+        <div onclick="toggleSection('sec-studios')" style="padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(99, 102, 241, 0.05); user-select: none;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="card-icon" style="background: rgba(99, 102, 241, 0.15); color: #818CF8; font-size: 18px;">🏢</div>
+            <div>
+              <h2 style="font-size: 15px; font-weight: 800;">Studio Hub Live Counters</h2>
+              <p class="card-desc">Titles accessible via Studio Hub watermark cards (Netflix, Disney, Warner Bros, A24, Apple, etc.)</p>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="sec-studios-toggle-text" style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Click to Expand</span>
+            <span id="sec-studios-icon" style="font-size: 13px; color: #818CF8; transition: transform 0.25s ease;">▼</span>
+          </div>
+        </div>
+        <div id="sec-studios-body" style="display: none; padding: 16px; border-top: 1px solid var(--border-subtle);">
+          <div class="studios-grid" id="studios-container">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- MODULE 3: 📁 Active Published Home Categories (Collapsible) -->
+      <div class="card" style="margin-bottom: 14px; padding: 0; overflow: hidden; border-color: rgba(245, 158, 11, 0.3);">
+        <div onclick="toggleSection('sec-categories')" style="padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(245, 158, 11, 0.05); user-select: none;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="card-icon" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; font-size: 18px;">📁</div>
+            <div>
+              <h2 style="font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                Active Published Home Categories
+                <span id="categories-count-badge" class="status-badge" style="font-size: 10px; padding: 1px 6px; background: rgba(245, 158, 11, 0.15); color: #F59E0B;">-- Shelves</span>
+              </h2>
+              <p class="card-desc">Dynamic shelves active on mobile app home screen</p>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn" onclick="event.stopPropagation(); window.triggerAiCategoryDiscovery();" style="background: linear-gradient(135deg, #10B981, #059669); font-size: 11px; padding: 4px 8px; font-weight: 700; color: white;">
+              ✨ AI Discover
+            </button>
+            <span id="sec-categories-toggle-text" style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Click to Expand</span>
+            <span id="sec-categories-icon" style="font-size: 13px; color: #F59E0B; transition: transform 0.25s ease;">▼</span>
+          </div>
+        </div>
+        <div id="sec-categories-body" style="display: none; padding: 16px; border-top: 1px solid var(--border-subtle);">
+          <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px; display:flex; align-items:center; gap:4px;">
+            <span>👈 Scroll horizontally to see Arabic & details 👉</span>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>English Title</th>
+                  <th>Arabic Title</th>
+                  <th>Type</th>
+                  <th>Live Titles</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="categories-tbody">
+                <!-- Injected via JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODULE 4: 🎬 AI Enriched Movies & Quality Inspection Hub (Collapsible) -->
+      <div class="card" style="margin-bottom: 14px; padding: 0; overflow: hidden; border-color: rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(99, 102, 241, 0.05));">
+        <div onclick="toggleSection('sec-enriched')" style="padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(99, 102, 241, 0.08); user-select: none;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="card-icon" style="background: rgba(99, 102, 241, 0.2); color: #818CF8; font-size: 18px;">🎬</div>
+            <div>
+              <h2 style="font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
                 AI Enriched Movies & Quality Inspection Hub
-                <span id="enriched-total-badge" class="status-badge" style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.15); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
+                <span id="enriched-total-badge" class="status-badge" style="font-size: 10px; padding: 1px 6px; background: rgba(99, 102, 241, 0.15); color: #818CF8;">
                   Loading...
                 </span>
               </h2>
               <p class="card-desc">Inspect all titles enriched by Groq & Gemini with populated Arabic translations, studios, and micro-genres</p>
             </div>
           </div>
-
-          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="sec-enriched-toggle-text" style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Click to Expand</span>
+            <span id="sec-enriched-icon" style="font-size: 13px; color: #818CF8; transition: transform 0.25s ease;">▼</span>
+          </div>
+        </div>
+        <div id="sec-enriched-body" style="display: none; padding: 16px; border-top: 1px solid var(--border-subtle);">
+          <!-- Filters & Search Toolbar -->
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
             <!-- Filter Engine Pills -->
             <div style="display: flex; background: rgba(0,0,0,0.3); padding: 3px; border-radius: 8px; border: 1px solid var(--border-subtle);">
               <button id="filter-engine-all" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border: none; background: rgba(255,255,255,0.15); font-weight: 700;" onclick="filterEnrichedEngine('all')">🌟 All</button>
@@ -1063,23 +1102,24 @@ export function renderDashboardHtml(): string {
             </div>
 
             <!-- Live Search Box -->
-            <input type="text" id="enriched-search-input" placeholder="🔍 Search title or arabic..." style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; width: 210px;" oninput="debounceEnrichedSearch(this.value)">
-
-            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="loadEnrichedMovies()">🔄 Refresh</button>
+            <div style="display: flex; gap: 8px; flex: 1; max-width: 400px; justify-content: flex-end;">
+              <input type="text" id="enriched-search-input" placeholder="🔍 Search title or arabic..." style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; width: 100%;" oninput="debounceEnrichedSearch(this.value)">
+              <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; white-space: nowrap;" onclick="loadEnrichedMovies()">🔄 Refresh</button>
+            </div>
           </div>
-        </div>
 
-        <!-- Enriched Movies Grid Container -->
-        <div id="enriched-movies-container" style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 14px;">
-          <!-- Injected via JavaScript -->
-        </div>
+          <!-- Enriched Movies Grid Container -->
+          <div id="enriched-movies-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px;">
+            <!-- Injected via JavaScript -->
+          </div>
 
-        <!-- Pagination Footer -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 10px;">
-          <span id="enriched-pagination-info" style="font-size: 12px; color: var(--text-muted);">Showing 0-0 of 0 movies</span>
-          <div style="display: flex; gap: 8px;">
-            <button id="btn-enriched-prev" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(-1)" disabled>◀️ Previous</button>
-            <button id="btn-enriched-next" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(1)">Next ▶️</button>
+          <!-- Pagination Footer -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); flex-wrap: wrap; gap: 10px;">
+            <span id="enriched-pagination-info" style="font-size: 12px; color: var(--text-muted);">Showing 0-0 of 0 movies</span>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-enriched-prev" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(-1)" disabled>◀️ Previous</button>
+              <button id="btn-enriched-next" class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="changeEnrichedPage(1)">Next ▶️</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1170,6 +1210,55 @@ export function renderDashboardHtml(): string {
           window.loadEnrichedMovies();
         }
       }
+    };
+
+    // ── Module Collapse / Expand Controller (Default Collapsed) ──
+    window.toggleSection = function(secId) {
+      const body = document.getElementById(secId + '-body');
+      const icon = document.getElementById(secId + '-icon');
+      const text = document.getElementById(secId + '-toggle-text');
+      if (!body) return;
+
+      const isHidden = body.style.display === 'none' || !body.style.display;
+      body.style.display = isHidden ? 'block' : 'none';
+
+      if (icon) {
+        icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+      }
+      if (text) {
+        text.innerText = isHidden ? 'Click to Collapse' : 'Click to Expand';
+      }
+
+      if (secId === 'sec-enriched' && isHidden && typeof window.loadEnrichedMovies === 'function') {
+        window.loadEnrichedMovies();
+      }
+    };
+
+    window.expandAllSections = function() {
+      const list = ['sec-arabic', 'sec-studios', 'sec-categories', 'sec-enriched'];
+      list.forEach(function(secId) {
+        const body = document.getElementById(secId + '-body');
+        const icon = document.getElementById(secId + '-icon');
+        const text = document.getElementById(secId + '-toggle-text');
+        if (body) body.style.display = 'block';
+        if (icon) icon.style.transform = 'rotate(180deg)';
+        if (text) text.innerText = 'Click to Collapse';
+      });
+      if (typeof window.loadEnrichedMovies === 'function') {
+        window.loadEnrichedMovies();
+      }
+    };
+
+    window.collapseAllSections = function() {
+      const list = ['sec-arabic', 'sec-studios', 'sec-categories', 'sec-enriched'];
+      list.forEach(function(secId) {
+        const body = document.getElementById(secId + '-body');
+        const icon = document.getElementById(secId + '-icon');
+        const text = document.getElementById(secId + '-toggle-text');
+        if (body) body.style.display = 'none';
+        if (icon) icon.style.transform = 'rotate(0deg)';
+        if (text) text.innerText = 'Click to Expand';
+      });
     };
 
     window.showToast = function(msg) {
@@ -1837,6 +1926,9 @@ export function renderDashboardHtml(): string {
     window.openCreateModal = window.openCreateModal;
     window.closeCreateModal = window.closeCreateModal;
     window.switchTab = window.switchTab;
+    window.toggleSection = window.toggleSection;
+    window.expandAllSections = window.expandAllSections;
+    window.collapseAllSections = window.collapseAllSections;
 
     // Direct non-prefixed aliases for inline HTML onclick calls
     var fetchMetrics = window.fetchMetrics;
@@ -1862,6 +1954,9 @@ export function renderDashboardHtml(): string {
     var inspectMovieJson = window.inspectMovieJson;
     var closeJsonModal = window.closeJsonModal;
     var switchTab = window.switchTab;
+    var toggleSection = window.toggleSection;
+    var expandAllSections = window.expandAllSections;
+    var collapseAllSections = window.collapseAllSections;
 
     // Restore saved active tab (if any)
     const savedTab = localStorage.getItem('teraflix_active_tab') || 'operations';
