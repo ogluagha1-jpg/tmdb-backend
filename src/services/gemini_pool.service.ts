@@ -68,7 +68,14 @@ export class GeminiPoolService {
   private totalAiErrors = 0;
 
   // Selected stable model (supports override via GEMINI_MODEL)
-  private model = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
+  private model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+  // Candidate models in fallback order
+  private candidateModels = [
+    process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-3.1-flash-lite',
+  ];
 
   private constructor() {
     this.initializePool();
@@ -175,13 +182,6 @@ export class GeminiPoolService {
 
     return null;
   }
-
-  // Candidate models in fallback order
-  private candidateModels = [
-    process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-  ];
 
   /// Generates a structured JSON completion with multi-key rotation, model fallback cascade, and auto-retry
   public async generateJson<T>(prompt: string, retries = 6): Promise<T | null> {
