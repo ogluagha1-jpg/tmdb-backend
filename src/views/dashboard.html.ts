@@ -766,6 +766,9 @@ export function renderDashboardHtml(): string {
           <button id="btn-gap-scan" class="btn btn-primary" onclick="window.triggerCooperativeGapScan()" style="background: linear-gradient(135deg, #6366F1, #4F46E5); font-weight: 700;">
             🚀 Launch Cooperative AI Gap-Scan
           </button>
+          <button id="btn-discover-cats" class="btn" onclick="window.triggerAiCategoryDiscovery()" style="background: linear-gradient(135deg, #10B981, #059669); font-weight: 700; color: white;">
+            ✨ AI Discover & Dynamic Shelves
+          </button>
           <button class="btn" onclick="window.triggerAiTest()" style="background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); font-weight: 600;">
             ⚡ Test Key
           </button>
@@ -813,8 +816,13 @@ export function renderDashboardHtml(): string {
           <h2 style="font-size: 15px; font-weight: 800;">Active Published Home Categories</h2>
           <p class="card-desc">Dynamic shelves active on mobile app</p>
         </div>
-        <div id="categories-count-badge" class="status-badge" style="background: rgba(99, 102, 241, 0.12); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
-          -- Published Shelves
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <button class="btn" onclick="window.triggerAiCategoryDiscovery()" style="background: linear-gradient(135deg, #10B981, #059669); font-size: 12px; font-weight: 700; color: white;">
+            ✨ AI Discover New Shelves
+          </button>
+          <div id="categories-count-badge" class="status-badge" style="background: rgba(99, 102, 241, 0.12); color: #818CF8; border-color: rgba(99, 102, 241, 0.3);">
+            -- Published Shelves
+          </div>
         </div>
       </div>
       <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px; display:flex; align-items:center; gap:4px;">
@@ -1320,6 +1328,22 @@ export function renderDashboardHtml(): string {
       }
     };
 
+    window.triggerAiCategoryDiscovery = async function() {
+      window.showToast('🧠 AI analyzing catalogue trends & discovering dynamic home shelves...');
+      try {
+        const res = await fetch('/api/ai/categories/discover', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          window.showToast('✨ Published ' + data.discoveredCount + ' dynamic AI home shelves in realtime!');
+          setTimeout(window.fetchMetrics, 1000);
+        } else {
+          window.showToast('⚠️ AI Discovery: ' + (data.message || 'No shelves published'));
+        }
+      } catch (err) {
+        window.showToast('❌ AI Discovery failed: ' + err.message);
+      }
+    };
+
     // Global aliases
     window.fetchMetrics = window.fetchMetrics;
     window.fetchScannerStatus = window.fetchScannerStatus;
@@ -1332,6 +1356,7 @@ export function renderDashboardHtml(): string {
     window.triggerAiTest = window.triggerAiTest;
     window.toggleAiRuntime = window.toggleAiRuntime;
     window.triggerCooperativeGapScan = window.triggerCooperativeGapScan;
+    window.triggerAiCategoryDiscovery = window.triggerAiCategoryDiscovery;
     window.openCreateModal = window.openCreateModal;
     window.closeCreateModal = window.closeCreateModal;
 
@@ -1347,6 +1372,7 @@ export function renderDashboardHtml(): string {
     var triggerAiTest = window.triggerAiTest;
     var toggleAiRuntime = window.toggleAiRuntime;
     var triggerCooperativeGapScan = window.triggerCooperativeGapScan;
+    var triggerAiCategoryDiscovery = window.triggerAiCategoryDiscovery;
     var openCreateModal = window.openCreateModal;
     var closeCreateModal = window.closeCreateModal;
     var applyPreset = window.applyPreset;

@@ -323,6 +323,17 @@ app.get('/api/ai/gap-scan/status', async (_req: Request, res: Response) => {
   }
 });
 
+// 22. AI Discover & Realtime Publish Dynamic Home Categories
+app.post('/api/ai/categories/discover', async (_req: Request, res: Response) => {
+  try {
+    const { GeminiPoolService } = await import('./services/gemini_pool.service');
+    const result = await GeminiPoolService.getInstance().discoverAndPublishDynamicCategories();
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Server
 const port = parseInt(env.PORT, 10) || 3000;
 const server = app.listen(port, () => {

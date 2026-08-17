@@ -16,9 +16,21 @@ export interface AiEnrichmentResult {
   overview_ar?: string;
   tagline_ar?: string;
   primary_studio?: string;
-  studio_id?: number;
+  studio_id?: number | null;
+  is_original_production?: boolean;
+  false_positive_studio_ids_to_remove?: number[];
   thematic_keywords?: string[];
   vibe_badges?: string[];
+}
+
+export interface DiscoveredCategory {
+  id: string;
+  title: string;
+  title_ar: string;
+  category_type: 'curated' | 'thematic' | 'genre' | 'era';
+  filter_query: string;
+  order_by: string;
+  curation_reason: string;
 }
 
 export class GeminiPoolService {
@@ -41,22 +53,18 @@ export class GeminiPoolService {
     lastActiveAt: null as string | null,
   };
 
-  // 16-Key High-Capacity Pool
+  // Verified Active Keys Pool
   private defaultKeyPool: string[] = [
     'AIzaSyB4dZhhGMDCbA-v71flTpIq0ooqCdothHE',
     'AIzaSyCkSOGdsmezbwTU46b4kUP3kj3hvjlj1k0',
-    'AIzaSyC4SmQ8R5XvFf73dmUw-DtgdJq8LeKZiQg',
     'AIzaSyCNDEoKgXhYXROBEjYZpo064XVAE_tC8Vs',
     'AIzaSyCFuD9GP70Z_tja18fbvi_O4QxMTnMDhB4',
     'AIzaSyAG3u7BQ1CiuKMXFv9LU7sKFjqTbeTGSzQ',
-    'AIzaSyBLxZEQUGDQTdDSe3GF7ULENx2O_6WWWr0',
     'AIzaSyCVqJ4nihAFSdS-vo2LwjNZW8w16CPuYoQ',
     'AIzaSyC97H3IY4UnaNWqlUvgJ6w9ShMwAH72IjY',
     'AIzaSyCcjC5n-DCroHyTH9P6YDHzt-JXjiE-22Y',
     'AIzaSyBjc5BuffnZeXaRgKTLpGaw2PLdd11IzJQ',
     'AIzaSyDcOpg8BIcvua3VUQxpjETCSuhRk8X5_YE',
-    'AIzaSyCMRul1nlpqzNv6NkSM3jZjbfHNAt3eJ9c',
-    'AIzaSyC_N7g_aqlVWjyxD30z4ir7i7rsylLR3CQ',
     'AIzaSyDHbIYWkPpQU7YOXs_CqCtpkRu9jlka9AI',
     'AIzaSyCHztHJNN11mmEJNPXedo6K-es7k5CbHdE',
   ];
@@ -161,7 +169,7 @@ export class GeminiPoolService {
   }
 
   /// Generates a structured JSON completion with multi-key rotation and auto-retry
-  public async generateJson<T>(prompt: string, retries = 3): Promise<T | null> {
+  public async generateJson<T>(prompt: string, retries = 5): Promise<T | null> {
     if (this.keyPool.length === 0) return null;
 
     let attempt = 0;
@@ -198,7 +206,7 @@ export class GeminiPoolService {
             },
           },
           {
-            timeout: 10000,
+            timeout: 30000,
             headers: { 'Content-Type': 'application/json' },
           }
         );
@@ -223,11 +231,13 @@ export class GeminiPoolService {
           console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 60s. Auto-rotating...`);
           stat.status = 'cooldown';
           stat.cooldownUntil = Date.now() + 60000;
-        } else if (status === 400 || status === 403 || /api_key_invalid/i.test(msg)) {
-          console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid/forbidden: ${msg}`);
+        } else if (status === 400 || status === 403 || /api_key_invalid|no longer available/i.test(msg)) {
+          console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid: ${msg}`);
           stat.status = 'invalid';
         } else {
-          console.warn(`[GEMINI_POOL] ⚠️ Key #${index + 1} request error: ${msg}`);
+          console.warn(`[GEMINI_POOL] ⚠️ Key #${index + 1} request error: ${msg}. Auto-rotating...`);
+          // Temporarily cooldown for 15s so next retry picks a fresh key
+          stat.cooldownUntil = Date.now() + 15000;
         }
       }
     }
@@ -243,35 +253,48 @@ export class GeminiPoolService {
     overview?: string;
     existingGenres?: string[];
     currentStudio?: string;
+    currentStudioIds?: number[];
   }): Promise<AiEnrichmentResult | null> {
     const prompt = `You are the lead cinema categorization and localization engine for a premium streaming platform (Teraflix).
 Analyze the following movie and provide:
 1. "title_ar": The official, most widely recognized cinematic Arabic title. (e.g. "Interstellar" -> "بين النجوم", "Inception" -> "استهلال / بداية", "The Dark Knight" -> "فارس الظلام", "The Godfather" -> "العراب").
 2. "overview_ar": A compelling, fluent, cinematic Arabic synopsis (2-4 sentences) translated naturally without robotic literal phrasing.
 3. "tagline_ar": A dramatic, catchy Arabic streaming tagline (e.g. "في الفضاء... لا أحد يستطيع سماع صراخك").
-4. "primary_studio": The authentic studio/platform brand behind this movie. Specifically identify streaming originals (Netflix, Apple TV+, Amazon MGM Studios, Disney+, HBO Max) or major studios (Warner Bros, Universal Pictures, Paramount Pictures, Sony Pictures, Marvel Studios, A24, Studio Ghibli, 20th Century Studios, Lionsgate).
-5. "studio_id": Numeric ID matching the studio:
+4. "primary_studio": The authentic production company or original streaming brand behind this movie (e.g. "Netflix", "Walt Disney Pictures", "Warner Bros. Pictures", "Universal Pictures", "Paramount Pictures", "Sony Pictures", "Apple Studios", "Amazon MGM Studios", "A24", "Neon", "Studio Ghibli", "20th Century Studios", "Lionsgate", "Marvel Studios", "Pixar", "Blumhouse Productions", "Focus Features", "Searchlight Pictures", "StudioCanal").
+5. "studio_id": Numeric TMDB ID matching the studio:
    - Netflix: 178464
-   - Disney / Marvel: 2
+   - Walt Disney Pictures / Disney+: 2
+   - Marvel Studios: 420
+   - Pixar: 3
+   - Lucasfilm: 1
    - Warner Bros / DC: 174
-   - Universal: 33
-   - Paramount: 4
-   - Sony / Columbia: 5
-   - Apple Studios: 194232
-   - Amazon MGM: 20580
+   - Universal Pictures: 33
+   - Blumhouse Productions: 3172
+   - Paramount Pictures: 4
+   - Sony Pictures / Columbia: 5
+   - Apple Studios / Apple TV+: 194232
+   - Amazon MGM Studios: 20580
    - A24: 420
+   - Neon: 90060
    - Studio Ghibli: 10338
    - Lionsgate: 1632
    - 20th Century Studios: 127928
-   - null if independent/other.
-6. "thematic_keywords": Array of 4-6 rich thematic micro-genres (e.g. "Heist", "Time Travel", "Mind-Bending", "Survival Horror", "Martial Arts", "Cyberpunk", "Oscar Winner", "Based on True Story", "Serial Killer", "Psychological Thriller", "Dark Comedy").
-7. "vibe_badges": Array of 3 concise emoji-prefixed mood badges (e.g. ["⚡ High-Tension", "🧠 Mind-Bending", "🌧️ Emotional"]).
+   - Searchlight Pictures: 43
+   - Focus Features: 10146
+   - Legendary Pictures: 923
+   - StudioCanal: 694
+   - null if independent/unlisted.
+6. "is_original_production": Boolean (true if this movie was commissioned / produced as an authentic platform original, false if it was a theatrical film or third-party licensed movie).
+7. "false_positive_studio_ids_to_remove": Array of numbers. Studio IDs that should be REMOVED if this movie was mistakenly associated with them (for example, if a 20th Century Studios or Warner Bros theatrical film like "Prey" or "Dune" was falsely given Netflix Studio ID 178464, return [178464]).
+8. "thematic_keywords": Array of 4-6 rich thematic micro-genres (e.g. "Heist", "Time Travel", "Mind-Bending", "Survival Horror", "Martial Arts", "Cyberpunk", "Oscar Winner", "Based on True Story", "Serial Killer", "Psychological Thriller", "Dark Comedy").
+9. "vibe_badges": Array of 3 concise emoji-prefixed mood badges (e.g. ["⚡ High-Tension", "🧠 Mind-Bending", "🌧️ Emotional"]).
 
 Movie Information:
 - English Title: "${params.title}"
 - Year: ${params.year || 'Unknown'}
 - Overview: "${params.overview || 'N/A'}"
 - Current Genres: ${JSON.stringify(params.existingGenres || [])}
+- Currently Tagged Studio IDs: ${JSON.stringify(params.currentStudioIds || [])}
 
 Respond ONLY in valid JSON conforming to this schema:
 {
@@ -280,6 +303,8 @@ Respond ONLY in valid JSON conforming to this schema:
   "tagline_ar": "string",
   "primary_studio": "string",
   "studio_id": number or null,
+  "is_original_production": boolean,
+  "false_positive_studio_ids_to_remove": [number],
   "thematic_keywords": ["string"],
   "vibe_badges": ["string"]
 }`;
@@ -468,11 +493,13 @@ Respond ONLY in valid JSON conforming to this schema:
 
       try {
         const genres = Array.isArray(movie.genres_json) ? movie.genres_json.map((g: any) => g.name || g) : [];
+        const existingStudios = Array.isArray(movie.studios_json) ? movie.studios_json : [];
         const aiResult = await this.enrichMovieWithAi({
           title: movie.title,
           year: movie.year,
           overview: movie.overview,
           existingGenres: genres,
+          currentStudioIds: existingStudios.map((s: any) => s.id),
         });
 
         if (!aiResult) {
@@ -498,15 +525,32 @@ Respond ONLY in valid JSON conforming to this schema:
           updatePayload.tagline_ar = aiResult.tagline_ar;
         }
 
-        // Fill studios if missing
+        // Studios & Brand Tagging + False-Positive Removal
         let studios = Array.isArray(movie.studios_json) ? [...movie.studios_json] : [];
-        if (studios.length === 0 && aiResult.primary_studio && aiResult.studio_id) {
-          studios.push({
-            id: aiResult.studio_id,
-            name: aiResult.primary_studio,
-            logo_path: null,
-            origin_country: 'US',
-          });
+        let studiosModified = false;
+
+        // Remove false positives identified by AI
+        if (Array.isArray(aiResult.false_positive_studio_ids_to_remove) && aiResult.false_positive_studio_ids_to_remove.length > 0) {
+          const beforeLen = studios.length;
+          studios = studios.filter((s: any) => !aiResult.false_positive_studio_ids_to_remove!.includes(s.id));
+          if (studios.length !== beforeLen) studiosModified = true;
+        }
+
+        // Inject authentic studio / new brand if missing
+        if (aiResult.primary_studio && aiResult.studio_id) {
+          const alreadyHas = studios.some((s: any) => s.id === aiResult.studio_id);
+          if (!alreadyHas) {
+            studios.push({
+              id: aiResult.studio_id,
+              name: aiResult.primary_studio,
+              logo_path: null,
+              origin_country: 'US',
+            });
+            studiosModified = true;
+          }
+        }
+
+        if (studiosModified) {
           updatePayload.studios_json = studios;
         }
 
@@ -550,5 +594,125 @@ Respond ONLY in valid JSON conforming to this schema:
 
     console.log(`[GEMINI_GAP_SCAN] 🏁 Cooperative Gap Scan Complete! Processed: ${this.cooperativeScanStats.processed}, Enriched: ${this.cooperativeScanStats.enriched}`);
     this.isCooperativeScanning = false;
+  }
+
+  /// ── DYNAMIC HOME CATEGORY DISCOVERY & REALTIME PUBLISHING ──
+  /// Uses Gemini AI to discover trending, binge-worthy categories from the active catalogue and dynamically updates home_categories in realtime
+  public async discoverAndPublishDynamicCategories(): Promise<{
+    success: boolean;
+    discoveredCount: number;
+    publishedCategories: any[];
+    message: string;
+  }> {
+    const { SupabaseService } = await import('./supabase.service');
+    const supabase = SupabaseService.getClient();
+
+    console.log('[GEMINI_CATEGORY_DISCOVERY] 🧠 Initiating AI Dynamic Category Discovery...');
+
+    const prompt = `You are the lead content curation and discovery architect for Teraflix (a premium streaming platform).
+Discover 6 to 10 brand-new, ultra-engaging, high-converting home page dynamic categories / shelves based on modern cinema trends, popular genres, and streaming tastes.
+
+Requirements for each discovered category:
+1. "id": Unique snake_case identifier starting with "ai_" (e.g. "ai_cyberpunk_futures", "ai_a24_masterpieces", "ai_adrenaline_heists", "ai_mind_benders", "ai_space_odysseys", "ai_true_crime_thrills", "ai_dark_comedy_satires", "ai_epic_fantasy_realms").
+2. "title": Catchy, uppercase English title (e.g. "CYBERPUNK & DYSTOPIAN FUTURES", "A24 INDIE MASTERPIECES", "ADRENALINE HEISTS & HIGH-STAKES").
+3. "title_ar": Fluent, prestigious cinematic Arabic translation (e.g. "عوالم السايبربانك والمستقبل المظلم", "تحف سينما A24 المستقلة", "إثارة وسرقة وسرعة فائقة").
+4. "category_type": "curated"
+5. "filter_query": PostgREST filter string compatible with Supabase movies table (e.g. "or=(keywords_json.cs.[{\\"name\\":\\"Cyberpunk\\"}],keywords_json.cs.[{\\"name\\":\\"Dystopia\\"}])", "studios_json.cs.[{\\"id\\":420}]", "or=(keywords_json.cs.[{\\"name\\":\\"Heist\\"}],genres_json.cs.[{\\"id\\":28}])", "vote_average=gte.8.0&release_date=gte.2024-01-01").
+6. "order_by": Ordering field (e.g. "popularity.desc", "vote_average.desc", "release_date.desc.nullslast").
+7. "curation_reason": 1 sentence explaining why this shelf drives viewer engagement.
+
+Respond ONLY in valid JSON matching this schema:
+{
+  "categories": [
+    {
+      "id": "string",
+      "title": "string",
+      "title_ar": "string",
+      "category_type": "curated",
+      "filter_query": "string",
+      "order_by": "string",
+      "curation_reason": "string"
+    }
+  ]
+}`;
+
+    const aiRes = await this.generateJson<{ categories: DiscoveredCategory[] }>(prompt);
+    if (!aiRes || !Array.isArray(aiRes.categories) || aiRes.categories.length === 0) {
+      return {
+        success: false,
+        discoveredCount: 0,
+        publishedCategories: [],
+        message: 'AI category discovery returned no candidates.',
+      };
+    }
+
+    const { env } = await import('../config/env');
+    const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
+    const published: any[] = [];
+
+    // Get max sort_order from existing categories
+    const { data: existingCats } = await supabase
+      .from('home_categories')
+      .select('sort_order')
+      .order('sort_order', { ascending: false })
+      .limit(1);
+
+    let nextSortOrder = (existingCats && existingCats[0]?.sort_order ? existingCats[0].sort_order : 30) + 1;
+
+    for (const cat of aiRes.categories) {
+      try {
+        let countUrl = `${env.SUPABASE_URL}/rest/v1/movies?select=id`;
+        if (cat.filter_query) {
+          countUrl += `&${cat.filter_query}`;
+        }
+
+        const countRes = await axios.get(countUrl, {
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            Range: '0-0',
+            Prefer: 'count=exact',
+          },
+          timeout: 4000,
+        });
+
+        const contentRange = countRes.headers['content-range'];
+        const total = contentRange ? parseInt(contentRange.split('/')[1], 10) : 0;
+
+        if (total >= 4) {
+          const payload = {
+            id: cat.id,
+            title: cat.title,
+            title_ar: cat.title_ar,
+            category_type: cat.category_type,
+            genre_id: 0,
+            filter_query: cat.filter_query,
+            order_by: cat.order_by || 'popularity.desc',
+            sort_order: nextSortOrder++,
+            movie_count: total,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          };
+
+          const { error: upsertErr } = await supabase
+            .from('home_categories')
+            .upsert(payload, { onConflict: 'id' });
+
+          if (!upsertErr) {
+            published.push({ ...payload, curation_reason: cat.curation_reason });
+            console.log(`[GEMINI_CATEGORY_DISCOVERY] 🌟 Published AI Shelf: "${cat.title}" (${total} titles)`);
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[GEMINI_CATEGORY_DISCOVERY] Skip category "${cat.title}":`, err.message);
+      }
+    }
+
+    return {
+      success: true,
+      discoveredCount: published.length,
+      publishedCategories: published,
+      message: `AI Discovered and Published ${published.length} dynamic new home categories in realtime!`,
+    };
   }
 }
