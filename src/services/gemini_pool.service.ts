@@ -21,6 +21,7 @@ export interface AiEnrichmentResult {
   false_positive_studio_ids_to_remove?: number[];
   thematic_keywords?: string[];
   vibe_badges?: string[];
+  ai_model?: string;
 }
 
 export interface DiscoveredCategory {
@@ -341,9 +342,12 @@ export class GeminiPoolService {
         if (!content) throw new Error('Empty Groq response content');
 
         const parsed = JSON.parse(content.trim()) as T;
+        if (typeof parsed === 'object' && parsed !== null) {
+          (parsed as any).ai_model = `groq/${m}`;
+        }
         stat.totalSuccess++;
         this.totalAiSuccess++;
-        console.log(`[GROQ_FALLBACK] 🚀 Llama 3.3 70B successfully completed AI enrichment in ${Date.now() - t0}ms!`);
+        console.log(`[GROQ_FALLBACK] 🚀 ${m} successfully completed AI enrichment in ${Date.now() - t0}ms!`);
         return parsed;
       } catch (err: any) {
         stat.totalErrors++;
@@ -421,6 +425,9 @@ export class GeminiPoolService {
         rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
 
         const parsed = JSON.parse(rawText) as T;
+        if (typeof parsed === 'object' && parsed !== null) {
+          (parsed as any).ai_model = `google/${targetModel}`;
+        }
         stat.totalSuccess++;
         this.totalAiSuccess++;
         return parsed;
@@ -836,6 +843,11 @@ Respond ONLY in valid JSON conforming to this schema:
 
         const updatePayload: any = {};
 
+        // Track specific AI Model that performed the enrichment
+        if (aiResult.ai_model) {
+          updatePayload.ai_model = aiResult.ai_model;
+        }
+
         // Fill Arabic title if missing
         if (!movie.title_ar && aiResult.title_ar) {
           updatePayload.title_ar = aiResult.title_ar;
@@ -895,14 +907,25 @@ Respond ONLY in valid JSON conforming to this schema:
 
         if (Object.keys(updatePayload).length > 0) {
           updatePayload.enriched_at = new Date().toISOString();
-          const { error: updErr } = await supabase
+          let { error: updErr } = await supabase
             .from('movies')
             .update(updatePayload)
             .eq('id', movie.id);
 
+          // Graceful fallback if ai_model column is not yet migrated in Supabase table
+          if (updErr && /ai_model/i.test(updErr.message)) {
+            delete updatePayload.ai_model;
+            const retryRes = await supabase
+              .from('movies')
+              .update(updatePayload)
+              .eq('id', movie.id);
+            updErr = retryRes.error;
+          }
+
           if (!updErr) {
             this.cooperativeScanStats.enriched++;
           } else {
+            console.warn(`[GEMINI_GAP_SCAN] Database save error for movie #${movie.id}: ${updErr.message}`);
             this.cooperativeScanStats.failed++;
           }
         }
