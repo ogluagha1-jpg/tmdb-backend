@@ -249,13 +249,14 @@ export class GeminiPoolService {
           console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 180s. Auto-rotating...`);
           stat.status = 'cooldown';
           stat.cooldownUntil = Date.now() + 180000;
+          await new Promise((r) => setTimeout(r, 1000));
         } else if (status === 400 || status === 403 || /api_key_invalid|no longer available/i.test(msg)) {
           console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid: ${msg}`);
           stat.status = 'invalid';
         } else {
           console.warn(`[GEMINI_POOL] ⚠️ Key #${index + 1} request error: ${msg}. Auto-rotating...`);
-          // Temporarily cooldown for 15s so next retry picks a fresh key
           stat.cooldownUntil = Date.now() + 15000;
+          await new Promise((r) => setTimeout(r, 500));
         }
       }
     }
@@ -601,8 +602,8 @@ Respond ONLY in valid JSON conforming to this schema:
 
         this.cooperativeScanStats.processed++;
 
-        // Controlled pacing: ~300ms between requests (spread across 16 keys = high throughput without exhausting any single key)
-        await new Promise((r) => setTimeout(r, 300));
+        // Controlled pacing: ~1200ms between requests (spread across 12 keys = ~4 RPM per key, 100% safe within 15 RPM free tier limits)
+        await new Promise((r) => setTimeout(r, 1200));
       } catch (err: any) {
         console.warn(`[GEMINI_GAP_SCAN] Error enriching #${movie.id} (${movie.title}):`, err.message);
         this.cooperativeScanStats.failed++;
