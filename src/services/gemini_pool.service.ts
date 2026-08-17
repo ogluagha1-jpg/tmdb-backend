@@ -434,6 +434,13 @@ Respond ONLY in valid JSON conforming to this schema:
     message: string;
     totalGaps?: number;
   }> {
+    if (this.keyPool.length === 0) {
+      return {
+        started: false,
+        message: 'No GEMINI_API_KEYS found. Please add your Gemini API keys to Railway Environment Variables.',
+      };
+    }
+
     if (this.isCooperativeScanning && !this.isCooperativeScanPaused) {
       return { started: false, message: 'Cooperative AI Gap-Scan is already running.' };
     }
@@ -488,6 +495,12 @@ Respond ONLY in valid JSON conforming to this schema:
     const { SupabaseService } = await import('./supabase.service');
     const supabase = SupabaseService.getClient();
 
+    if (this.keyPool.length === 0) {
+      console.error('[GEMINI_GAP_SCAN] ⛔ No Gemini keys available. Aborting gap scan.');
+      this.isCooperativeScanning = false;
+      return;
+    }
+
     console.log('[GEMINI_GAP_SCAN] 🔍 Fetching movies with missing Arabic or Studio fields...');
 
     // Fetch movies missing title_ar, overview_ar, or studios_json
@@ -535,6 +548,16 @@ Respond ONLY in valid JSON conforming to this schema:
         if (!aiResult) {
           this.cooperativeScanStats.failed++;
           this.cooperativeScanStats.processed++;
+
+          // Check if all keys became invalid/revoked
+          const usableKeys = Array.from(this.keyStats.values()).filter((s) => s.status !== 'invalid');
+          if (usableKeys.length === 0) {
+            console.error('[GEMINI_GAP_SCAN] ⛔ All Gemini API keys are invalid or revoked. Halting cooperative gap scan.');
+            this.cooperativeScanStats.currentTitle = 'Stopped: All keys invalid/revoked';
+            this.isCooperativeScanning = false;
+            break;
+          }
+
           continue;
         }
 
