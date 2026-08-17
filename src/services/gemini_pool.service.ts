@@ -68,11 +68,13 @@ export class GeminiPoolService {
   private totalAiErrors = 0;
 
   // Selected stable model (supports override via GEMINI_MODEL)
-  private model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  private model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
   // Candidate models in fallback order
   private candidateModels = [
-    process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    process.env.GEMINI_MODEL || 'gemini-flash-latest',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
   ];
 
   private constructor() {
