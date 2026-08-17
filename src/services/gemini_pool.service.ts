@@ -321,101 +321,112 @@ export class GeminiPoolService {
     return null;
   }
 
-  /// Generates a structured JSON completion with multi-key rotation, model fallback cascade, and Groq open-source failover
-  public async generateJson<T>(prompt: string, retries = 6): Promise<T | null> {
-    // 1. Try Primary Gemini Pool if keys configured
-    if (this.keyPool.length > 0) {
-      let attempt = 0;
-      while (attempt < retries) {
-        attempt++;
-        const selected = this.getBestKey();
-        if (!selected) {
-          console.warn('[GEMINI_POOL] ⚠️ All Gemini keys in cooldown/exhausted. Attempting Groq Open-Source Fallback...');
-          break;
+  /// Calls Gemini Pool as fallback or secondary engine
+  public async callGeminiPool<T>(prompt: string, retries = 6): Promise<T | null> {
+    if (this.keyPool.length === 0) return null;
+
+    let attempt = 0;
+    while (attempt < retries) {
+      attempt++;
+      const selected = this.getBestKey();
+      if (!selected) {
+        console.warn('[GEMINI_POOL] ⚠️ All Gemini keys in cooldown/exhausted.');
+        break;
+      }
+
+      const { key, index } = selected;
+      const stat = this.keyStats.get(key)!;
+      const now = Date.now();
+
+      // Pick model from candidate list based on retry attempt
+      const targetModel = this.candidateModels[(attempt - 1) % this.candidateModels.length];
+
+      stat.rpmTimestamps.push(now);
+      stat.lastUsedAt = now;
+      this.totalAiRequests++;
+
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${key}`;
+        const response = await axios.post(
+          url,
+          {
+            contents: [
+              {
+                parts: [{ text: prompt }],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.2,
+            },
+          },
+          {
+            timeout: 30000,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+
+        let rawText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) {
+          throw new Error('Empty Gemini response content');
         }
 
-        const { key, index } = selected;
-        const stat = this.keyStats.get(key)!;
-        const now = Date.now();
+        // Clean any markdown fences if present
+        rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
 
-        // Pick model from candidate list based on retry attempt
-        const targetModel = this.candidateModels[(attempt - 1) % this.candidateModels.length];
+        const parsed = JSON.parse(rawText) as T;
+        stat.totalSuccess++;
+        this.totalAiSuccess++;
+        return parsed;
+      } catch (err: any) {
+        stat.totalErrors++;
+        this.totalAiErrors++;
 
-        stat.rpmTimestamps.push(now);
-        stat.lastUsedAt = now;
-        this.totalAiRequests++;
+        const status = err.response?.status;
+        const msg = err.response?.data?.error?.message || err.message;
 
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${key}`;
-          const response = await axios.post(
-            url,
-            {
-              contents: [
-                {
-                  parts: [{ text: prompt }],
-                },
-              ],
-              generationConfig: {
-                responseMimeType: 'application/json',
-                temperature: 0.2,
-              },
-            },
-            {
-              timeout: 30000,
-              headers: { 'Content-Type': 'application/json' },
-            }
-          );
+        // Exponential backoff with jitter
+        const backoffMs = Math.min(500 * Math.pow(1.5, attempt) + Math.floor(Math.random() * 400), 4000);
 
-          let rawText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (!rawText) {
-            throw new Error('Empty Gemini response content');
-          }
-
-          // Clean any markdown fences if present
-          rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-
-          const parsed = JSON.parse(rawText) as T;
-          stat.totalSuccess++;
-          this.totalAiSuccess++;
-          return parsed;
-        } catch (err: any) {
-          stat.totalErrors++;
-          this.totalAiErrors++;
-
-          const status = err.response?.status;
-          const msg = err.response?.data?.error?.message || err.message;
-
-          // Exponential backoff with jitter
-          const backoffMs = Math.min(500 * Math.pow(1.5, attempt) + Math.floor(Math.random() * 400), 4000);
-
-          if (status === 429 || /quota|resource_exhausted/i.test(msg)) {
-            console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 180s. Rotating to next key...`);
-            stat.status = 'cooldown';
-            stat.cooldownUntil = Date.now() + 180000;
-            await new Promise((r) => setTimeout(r, backoffMs));
-          } else if (status === 503 || status === 500 || status === 504 || /overload|high demand|unavailable/i.test(msg)) {
-            console.warn(`[GEMINI_POOL] ⏳ Model ${targetModel} temporary overload/spike (HTTP ${status}). Key #${index + 1} cooling 30s. Falling back to alternative model...`);
-            stat.cooldownUntil = Date.now() + 30000;
-            await new Promise((r) => setTimeout(r, backoffMs));
-          } else if (status === 404 || /not found|no longer available/i.test(msg)) {
-            console.warn(`[GEMINI_POOL] ⚠️ Model ${targetModel} unavailable. Auto-falling back to next model...`);
-            await new Promise((r) => setTimeout(r, 500));
-          } else if (status === 400 || status === 403 || /api_key_invalid|no longer available/i.test(msg)) {
-            console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid/revoked: ${msg}`);
-            stat.status = 'invalid';
-          } else {
-            console.warn(`[GEMINI_POOL] ⚠️ Key #${index + 1} request error: ${msg}. Auto-rotating...`);
-            stat.cooldownUntil = Date.now() + 15000;
-            await new Promise((r) => setTimeout(r, 500));
-          }
+        if (status === 429 || /quota|resource_exhausted/i.test(msg)) {
+          console.warn(`[GEMINI_POOL] 🟡 Key #${index + 1} hit 429 quota. Cooldown 180s. Rotating to next key...`);
+          stat.status = 'cooldown';
+          stat.cooldownUntil = Date.now() + 180000;
+          await new Promise((r) => setTimeout(r, backoffMs));
+        } else if (status === 503 || status === 500 || status === 504 || /overload|high demand|unavailable/i.test(msg)) {
+          console.warn(`[GEMINI_POOL] ⏳ Model ${targetModel} temporary overload/spike (HTTP ${status}). Key #${index + 1} cooling 30s. Falling back to alternative model...`);
+          stat.cooldownUntil = Date.now() + 30000;
+          await new Promise((r) => setTimeout(r, backoffMs));
+        } else if (status === 404 || /not found|no longer available/i.test(msg)) {
+          console.warn(`[GEMINI_POOL] ⚠️ Model ${targetModel} unavailable. Auto-falling back to next model...`);
+          await new Promise((r) => setTimeout(r, 500));
+        } else if (status === 400 || status === 403 || /api_key_invalid|no longer available/i.test(msg)) {
+          console.error(`[GEMINI_POOL] 🔴 Key #${index + 1} invalid/revoked: ${msg}`);
+          stat.status = 'invalid';
+        } else {
+          console.warn(`[GEMINI_POOL] ⚠️ Key #${index + 1} request error: ${msg}. Auto-rotating...`);
+          stat.cooldownUntil = Date.now() + 15000;
+          await new Promise((r) => setTimeout(r, 500));
         }
       }
     }
 
-    // 2. Seamless Failover: Call Groq Open-Source Llama 3.3 70B
+    return null;
+  }
+
+  /// Generates a structured JSON completion with Groq Llama 3.3 70B as PRIMARY and Gemini as SECONDARY fallback
+  public async generateJson<T>(prompt: string, retries = 6): Promise<T | null> {
+    // 1. PRIMARY ENGINE: Groq Open-Source (Meta Llama 3.3 70B / Llama 3.1 8B)
     if (this.groqKeyPool.length > 0) {
       const groqResult = await this.callGroqOpenSource<T>(prompt);
       if (groqResult) return groqResult;
+      console.warn('[AI_GATEWAY] ⚠️ Groq Primary Engine returned null or in cooldown. Falling back to Gemini secondary pool...');
+    }
+
+    // 2. SECONDARY FALLBACK: Google Gemini Multi-Key Pool
+    if (this.keyPool.length > 0) {
+      const geminiResult = await this.callGeminiPool<T>(prompt, retries);
+      if (geminiResult) return geminiResult;
     }
 
     return null;
