@@ -378,10 +378,17 @@ app.get('/api/ai/enriched-movies', async (req: Request, res: Response) => {
       query = query.or(`title.ilike.%${search}%,title_ar.ilike.%${search}%`);
     }
 
-    let { data: movies, count, error } = await query.range(offset, offset + limit - 1);
+    let movies: any[] | null = null;
+    let totalCount: number | null = 0;
+    let queryError: any = null;
+
+    const queryRes = await query.range(offset, offset + limit - 1);
+    movies = queryRes.data;
+    totalCount = queryRes.count;
+    queryError = queryRes.error;
 
     // If ai_model column is not yet migrated in Supabase table, query base columns safely
-    if (error && /ai_model/i.test(error.message)) {
+    if (queryError && /ai_model/i.test(queryError.message)) {
       let fallbackQuery = supabase
         .from('movies')
         .select(baseSelect, { count: 'exact' })
@@ -395,16 +402,16 @@ app.get('/api/ai/enriched-movies', async (req: Request, res: Response) => {
 
       const retryRes = await fallbackQuery.range(offset, offset + limit - 1);
       movies = retryRes.data;
-      count = retryRes.count;
-      error = retryRes.error;
+      totalCount = retryRes.count;
+      queryError = retryRes.error;
     }
 
-    if (error) throw error;
+    if (queryError) throw queryError;
 
     res.status(200).json({
       success: true,
       count: movies?.length || 0,
-      total: count || 0,
+      total: totalCount || 0,
       offset,
       limit,
       movies: movies || [],
