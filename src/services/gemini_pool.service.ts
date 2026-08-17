@@ -58,6 +58,17 @@ export const SUPPORTED_GEMINI_MODELS: Record<string, { label: string; descriptio
   },
 };
 
+function sanitizePostgrestFilter(query?: string): string {
+  if (!query) return '';
+  let sanitized = query.trim();
+  // Fix accidental "=" after column inside or=(...) or and=(...) groups (e.g. vote_average=gte.8.2 -> vote_average.gte.8.2)
+  sanitized = sanitized.replace(/or=\((.*?)\)/g, (_match, inner) => {
+    const fixedInner = inner.replace(/([a-zA-Z0-9_]+)=(eq|neq|gt|gte|lt|lte|like|ilike|is|in|cs|cd)\./g, '$1.$2.');
+    return `or=(${fixedInner})`;
+  });
+  return sanitized;
+}
+
 export class GeminiPoolService {
   private static instance: GeminiPoolService;
 
@@ -1175,9 +1186,10 @@ Respond ONLY in valid JSON matching this schema:
     // 3. Parallel live count validation against Supabase movies table
     for (const cat of finalCandidates) {
       try {
+        const cleanQuery = sanitizePostgrestFilter(cat.filter_query);
         let countUrl = `${env.SUPABASE_URL}/rest/v1/movies?select=id`;
-        if (cat.filter_query) {
-          countUrl += `&${cat.filter_query}`;
+        if (cleanQuery) {
+          countUrl += `&${cleanQuery}`;
         }
 
         const countRes = await axios.get(countUrl, {
@@ -1201,7 +1213,7 @@ Respond ONLY in valid JSON matching this schema:
             title_ar: cat.title_ar,
             category_type: cat.category_type,
             genre_id: 0,
-            filter_query: cat.filter_query,
+            filter_query: cleanQuery || cat.filter_query,
             order_by: cat.order_by || 'popularity.desc',
             movie_count: total,
             is_active: true,

@@ -64,7 +64,7 @@ export class CategoryGeneratorService {
         category_type: 'curated',
         genre_id: 0,
         order_by: 'vote_average.desc',
-        filter_query: 'or=(keywords_json.cs.[{"name":"Certified Fresh"}],vote_average=gte.8.2)',
+        filter_query: 'or=(keywords_json.cs.[{"name":"Certified Fresh"}],vote_average.gte.8.2)',
         sort_order: 4,
       },
       {
