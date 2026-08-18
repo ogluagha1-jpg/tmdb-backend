@@ -576,28 +576,58 @@ export class GeminiPoolService {
     return null;
   }
 
-  /// Generates a structured JSON completion exclusively using Groq Open-Source Engine (Meta Llama 3.3 70B)
+  /// Generates a structured JSON completion with intelligent Task-Specific Quality Routing:
+  /// - 'gemini': Gemini Pool (17 keys) is Primary, Groq is Fallback.
+  /// - 'groq': Groq (gpt-oss-120b / allam-2-7b) is Primary, Gemini is Fallback.
   public async generateJson<T>(
     prompt: string,
     options?: { preference?: 'gemini' | 'groq'; retries?: number }
   ): Promise<T | null> {
-    if (this.groqKeyPool.length > 0) {
-      return await this.callGroqOpenSource<T>(prompt);
+    const preference = options?.preference || 'gemini';
+    const retries = options?.retries || 6;
+
+    if (preference === 'groq') {
+      // Groq as Primary
+      if (this.groqKeyPool.length > 0) {
+        const groqRes = await this.callGroqOpenSource<T>(prompt);
+        if (groqRes) return groqRes;
+        if (this.keyPool.length > 0) {
+          console.warn('[AI_GATEWAY] ⚠️ Groq Primary returned null. Falling back to Gemini pool...');
+        }
+      }
+      if (this.keyPool.length > 0) {
+        return this.callGeminiPool<T>(prompt, retries);
+      }
+    } else {
+      // Gemini Pool (17 keys) as Primary for deep Arabic localization & Gap Scan
+      if (this.keyPool.length > 0) {
+        const geminiRes = await this.callGeminiPool<T>(prompt, retries);
+        if (geminiRes) return geminiRes;
+        if (this.groqKeyPool.length > 0) {
+          console.warn('[AI_GATEWAY] ⚠️ Gemini Primary in cooldown. Falling back to Groq...');
+        }
+      }
+      if (this.groqKeyPool.length > 0) {
+        return this.callGroqOpenSource<T>(prompt);
+      }
     }
-    console.warn('[AI_GATEWAY] ⚠️ No Groq API keys available.');
+
     return null;
   }
 
-  /// Specialized method: Enrich movie with Arabic metadata, authentic studio identification & micro-genres via Groq Llama 3.3 70B
-  public async enrichMovieWithAi(params: {
-    title: string;
-    cleanTitle?: string;
-    year?: string | number;
-    overview?: string;
-    existingGenres?: string[];
-    currentStudio?: string;
-    currentStudioIds?: number[];
-  }): Promise<AiEnrichmentResult | null> {
+  /// Specialized method: Enrich movie with Arabic metadata, authentic studio identification & micro-genres
+  public async enrichMovieWithAi(
+    params: {
+      title: string;
+      cleanTitle?: string;
+      year?: string | number;
+      overview?: string;
+      existingGenres?: string[];
+      currentStudio?: string;
+      currentStudioIds?: number[];
+    },
+    options?: { engine?: 'groq' | 'gemini' | 'auto'; preference?: 'gemini' | 'groq' }
+  ): Promise<AiEnrichmentResult | null> {
     const prompt = `You are the lead cinema categorization and localization engine for a premium streaming platform (Teraflix).
 Analyze the following movie and provide authentic Arabic cultural localization and studio attribution:
 
@@ -653,8 +683,20 @@ Respond ONLY in valid JSON conforming to this schema:
   "vibe_badges": ["string"]
 }`;
 
-    // Exclusively call Groq Llama 3.3 70B
-    return await this.callGroqOpenSource<AiEnrichmentResult>(prompt);
+    const engine = options?.engine || (options?.preference === 'groq' ? 'groq' : 'auto');
+
+    if (engine === 'groq') {
+      // Exclusively Groq for Runtime Auto-Scanner (Gemini strictly bypassed for runtime scanning)
+      return await this.callGroqOpenSource<AiEnrichmentResult>(prompt);
+    }
+
+    if (engine === 'gemini') {
+      // Dedicated Gemini Pool (17 keys)
+      return await this.callGeminiPool<AiEnrichmentResult>(prompt);
+    }
+
+    // 'auto' (used by Cooperative Gap-Scan & background tasks): Gemini Pool (17 keys) with Groq fallback
+    return await this.generateJson<AiEnrichmentResult>(prompt, { preference: 'gemini' });
   }
 
   /// Returns full health metrics of the Gemini pool

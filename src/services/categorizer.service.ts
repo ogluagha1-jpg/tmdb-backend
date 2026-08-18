@@ -269,13 +269,16 @@ export class CategorizerService {
       // When runtime AI is enabled, Groq (Llama 3.3 70B) handles all localization and gap-filling
       if (geminiPool.isAiEnabled() && (hasMissingArabic || needsStudio || needsKeywords)) {
         try {
-          const aiResult = await geminiPool.enrichMovieWithAi({
-            title: tmdbDetails?.title || movie.title,
-            cleanTitle: this.cleanTitle(movie.title),
-            year: year,
-            overview: tmdbDetails?.overview || cinemetaMeta?.description || movie.overview,
-            existingGenres: genresJson.map((g: any) => g.name),
-          });
+          const aiResult = await geminiPool.enrichMovieWithAi(
+            {
+              title: tmdbDetails?.title || movie.title,
+              cleanTitle: this.cleanTitle(movie.title),
+              year: year,
+              overview: tmdbDetails?.overview || cinemetaMeta?.description || movie.overview,
+              existingGenres: genresJson.map((g: any) => g.name),
+            },
+            { engine: 'groq' }
+          );
 
           if (aiResult) {
             // Arabic localization from Groq AI
