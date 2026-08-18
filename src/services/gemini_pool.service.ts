@@ -988,21 +988,53 @@ Respond ONLY in valid JSON conforming to this schema:
           updatePayload.tagline_ar = aiResult.tagline_ar;
         }
 
-        // Studios & Brand Tagging (Strictly non-destructive additions only)
+        // Studios & Brand Tagging with Knowledge Graph Validation
         let studios = Array.isArray(movie.studios_json) ? [...movie.studios_json] : [];
         let studiosModified = false;
 
-        // Inject authentic studio / new brand if missing
-        if (aiResult.primary_studio && aiResult.studio_id) {
-          const alreadyHas = studios.some((s: any) => s.id === aiResult.studio_id);
+        const { StreamingSourcesService } = await import('./streaming_sources.service');
+        const streamingSources = StreamingSourcesService.getInstance();
+        const movieYear = movie.year || (movie.release_date || '').slice(0, 4);
+        const matchedOriginal = streamingSources.matchOriginal(movie.title, movie.tmdb_title, movieYear);
+
+        const majorTheatricalStudioIds = [
+          127928, 25, 43, 174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559, 4, 24955, 2348, 8302, 333, 2, 6125, 5218, 420, 32353, 11106, 13252
+        ];
+        const hasMajorTheatricalStudio = studios.some((s: any) => majorTheatricalStudioIds.includes(s.id));
+
+        if (matchedOriginal) {
+          const alreadyHas = studios.some((s: any) => s.id === matchedOriginal.studioId);
           if (!alreadyHas) {
             studios.push({
-              id: aiResult.studio_id,
-              name: aiResult.primary_studio,
-              logo_path: null,
+              id: matchedOriginal.studioId,
+              name: matchedOriginal.studioName,
+              logo_path: matchedOriginal.logoPath,
               origin_country: 'US',
             });
             studiosModified = true;
+          }
+        } else if (hasMajorTheatricalStudio) {
+          // Clean false positive streaming platform distributor tags
+          const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
+          const beforeLen = studios.length;
+          studios = studios.filter((s: any) => !streamingPlatformIds.includes(s.id));
+          if (studios.length !== beforeLen) studiosModified = true;
+        }
+
+        // Inject authentic studio if identified by AI and not conflicting
+        if (aiResult.primary_studio && aiResult.studio_id) {
+          const isStreamingStudio = [178464, 185004, 194232, 20580].includes(aiResult.studio_id);
+          if (!isStreamingStudio || aiResult.is_original_production || matchedOriginal) {
+            const alreadyHas = studios.some((s: any) => s.id === aiResult.studio_id);
+            if (!alreadyHas) {
+              studios.push({
+                id: aiResult.studio_id,
+                name: aiResult.primary_studio,
+                logo_path: null,
+                origin_country: 'US',
+              });
+              studiosModified = true;
+            }
           }
         }
 

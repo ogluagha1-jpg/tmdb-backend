@@ -234,23 +234,33 @@ export class CategorizerService {
       const releaseDate = tmdbDetails?.release_date || movie.release_date || (cinemetaMeta?.year ? `${cinemetaMeta.year}-01-01` : '');
       const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : (movie.year || cinemetaMeta?.year);
 
-      // Multi-Source Streaming Originals Knowledge Graph (Wikipedia / Wikidata)
-      const hasMajorTheatricalStudio = studiosJson.some((s: any) =>
-        [127928, 25, 43, 174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559, 4, 24955, 2348, 8302, 333, 2, 6125, 5218, 420, 32353, 11106, 13252].includes(s.id)
-      );
+      // Multi-Source Streaming Originals Knowledge Graph & Deterministic Studio Attribution
+      const majorTheatricalStudioIds = [
+        127928, 25, 43, 174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559, 4, 24955, 2348, 8302, 333, 2, 6125, 5218, 420, 32353, 11106, 13252
+      ];
+      const hasMajorTheatricalStudio = studiosJson.some((s: any) => majorTheatricalStudioIds.includes(s.id));
 
-      if (!hasMajorTheatricalStudio) {
-        const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
-        const matchedOriginal = streamingSources.matchOriginal(movie.title, tmdbDetails?.title, year);
-        if (matchedOriginal) {
-          const alreadyPresent = studiosJson.some((s: any) => s.id === matchedOriginal.studioId);
-          if (!alreadyPresent) {
-            studiosJson.push({
-              id: matchedOriginal.studioId,
-              name: matchedOriginal.studioName,
-              logo_path: matchedOriginal.logoPath,
-              origin_country: 'US',
-            });
+      const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
+      const matchedOriginal = streamingSources.matchOriginal(movie.title, tmdbDetails?.title, year);
+
+      if (matchedOriginal) {
+        // Authentic verified streaming original from Knowledge Graph!
+        const alreadyPresent = studiosJson.some((s: any) => s.id === matchedOriginal.studioId);
+        if (!alreadyPresent) {
+          studiosJson.push({
+            id: matchedOriginal.studioId,
+            name: matchedOriginal.studioName,
+            logo_path: matchedOriginal.logoPath,
+            origin_country: 'US',
+          });
+        }
+      } else if (hasMajorTheatricalStudio) {
+        // FALSE POSITIVE CLEANUP: If a movie is a Major Theatrical Studio release (e.g. Warner Bros, Universal, Sony, Disney)
+        // and is NOT a verified streaming original, remove falsely attached streaming platform distributor IDs.
+        const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
+        for (let i = studiosJson.length - 1; i >= 0; i--) {
+          if (streamingPlatformIds.includes(studiosJson[i].id)) {
+            studiosJson.splice(i, 1);
           }
         }
       }
