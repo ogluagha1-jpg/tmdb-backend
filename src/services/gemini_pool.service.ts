@@ -659,9 +659,8 @@ Analyze the following movie and provide authentic Arabic cultural localization a
    - StudioCanal: 694
    - null if independent/unlisted.
 6. "is_original_production": Boolean (true if this movie was commissioned / produced as an authentic platform original, false if it was a theatrical film or third-party licensed movie).
-7. "false_positive_studio_ids_to_remove": Array of numbers. Studio IDs that should be REMOVED if this movie was mistakenly associated with them (for example, if a 20th Century Studios or Warner Bros theatrical film like "Prey" or "Dune" was falsely given Netflix Studio ID 178464, return [178464]).
-8. "thematic_keywords": Array of 4-6 rich thematic micro-genres (e.g. "Heist", "Time Travel", "Mind-Bending", "Survival Horror", "Martial Arts", "Cyberpunk", "Oscar Winner", "Based on True Story", "Serial Killer", "Psychological Thriller", "Dark Comedy").
-9. "vibe_badges": Array of 3 concise emoji-prefixed mood badges (e.g. ["⚡ High-Tension", "🧠 Mind-Bending", "🌧️ Emotional"]).
+7. "thematic_keywords": Array of 4-6 rich thematic micro-genres (e.g. "Heist", "Time Travel", "Mind-Bending", "Survival Horror", "Martial Arts", "Cyberpunk", "Oscar Winner", "Based on True Story", "Serial Killer", "Psychological Thriller", "Dark Comedy").
+8. "vibe_badges": Array of 3 concise emoji-prefixed mood badges (e.g. ["⚡ High-Tension", "🧠 Mind-Bending", "🌧️ Emotional"]).
 
 Movie Information:
 - English Title: "${params.title}"
@@ -678,7 +677,6 @@ Respond ONLY in valid JSON conforming to this schema:
   "primary_studio": "string",
   "studio_id": number or null,
   "is_original_production": boolean,
-  "false_positive_studio_ids_to_remove": [number],
   "thematic_keywords": ["string"],
   "vibe_badges": ["string"]
 }`;
@@ -990,16 +988,9 @@ Respond ONLY in valid JSON conforming to this schema:
           updatePayload.tagline_ar = aiResult.tagline_ar;
         }
 
-        // Studios & Brand Tagging + False-Positive Removal
+        // Studios & Brand Tagging (Strictly non-destructive additions only)
         let studios = Array.isArray(movie.studios_json) ? [...movie.studios_json] : [];
         let studiosModified = false;
-
-        // Remove false positives identified by AI
-        if (Array.isArray(aiResult.false_positive_studio_ids_to_remove) && aiResult.false_positive_studio_ids_to_remove.length > 0) {
-          const beforeLen = studios.length;
-          studios = studios.filter((s: any) => !aiResult.false_positive_studio_ids_to_remove!.includes(s.id));
-          if (studios.length !== beforeLen) studiosModified = true;
-        }
 
         // Inject authentic studio / new brand if missing
         if (aiResult.primary_studio && aiResult.studio_id) {

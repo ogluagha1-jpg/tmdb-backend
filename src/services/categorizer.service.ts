@@ -302,15 +302,6 @@ export class CategorizerService {
               });
             }
 
-            // Clean false positive studios if flagged by AI
-            if (Array.isArray(aiResult.false_positive_studio_ids_to_remove) && aiResult.false_positive_studio_ids_to_remove.length > 0) {
-              for (let i = studiosJson.length - 1; i >= 0; i--) {
-                if (aiResult.false_positive_studio_ids_to_remove.includes(studiosJson[i].id)) {
-                  studiosJson.splice(i, 1);
-                }
-              }
-            }
-
             // Merge AI thematic micro-genres
             if (Array.isArray(aiResult.thematic_keywords)) {
               aiResult.thematic_keywords.forEach((kw: string, idx: number) => {
