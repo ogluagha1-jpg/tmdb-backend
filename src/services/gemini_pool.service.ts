@@ -124,18 +124,12 @@ export class GeminiPoolService {
     cooldownUntil: number | null;
     status: 'healthy' | 'cooldown' | 'exhausted' | 'invalid';
     lastUsedAt: number | null;
-  }> = new Map();
-  private groqModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+  private groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
   private groqCandidateModels = [
-    process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
-    'qwen/qwen3.6-27b',
+    process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
     'llama-3.3-70b-specdec',
     'deepseek-r1-distill-llama-70b',
-    'llama-3.3-70b-versatile',
     'llama-3.1-8b-instant',
-    'llama-3.2-3b-preview',
-    'llama-3.2-1b-preview',
     'gemma2-9b-it',
   ];
   private groqRoundRobinCursor = 0;
@@ -558,48 +552,19 @@ export class GeminiPoolService {
     return null;
   }
 
-  /// Generates a structured JSON completion with intelligent Task-Specific Quality Routing:
-  /// - 'gemini': Gemini is Primary (for poetic Arabic localization, synopses, and cultural context), Groq is Fallback.
-  /// - 'groq': Groq Llama 3.3 70B is Primary (for deep micro-genre taxonomy, creative shelves, and strict formatting), Gemini is Fallback.
+  /// Generates a structured JSON completion exclusively using Groq Open-Source Engine (Meta Llama 3.3 70B)
   public async generateJson<T>(
     prompt: string,
     options?: { preference?: 'gemini' | 'groq'; retries?: number }
   ): Promise<T | null> {
-    const preference = options?.preference || 'gemini';
-    const retries = options?.retries || 6;
-
-    if (preference === 'groq') {
-      // 1. Groq as Primary for Taxonomy, Creative Curation & Dynamic Shelves
-      if (this.groqKeyPool.length > 0) {
-        const groqRes = await this.callGroqOpenSource<T>(prompt);
-        if (groqRes) return groqRes;
-        if (this.keyPool.length > 0) {
-          console.warn('[AI_GATEWAY] ⚠️ Groq Primary returned null. Falling back to Gemini secondary pool...');
-        }
-      }
-      // Fallback to Gemini
-      if (this.keyPool.length > 0) {
-        return this.callGeminiPool<T>(prompt, retries);
-      }
-    } else {
-      // 1. Gemini as Primary for Arabic Localization & Cultural Synopses
-      if (this.keyPool.length > 0) {
-        const geminiRes = await this.callGeminiPool<T>(prompt, retries);
-        if (geminiRes) return geminiRes;
-        if (this.groqKeyPool.length > 0) {
-          console.warn('[AI_GATEWAY] ⚠️ Gemini Primary returned null or in cooldown. Falling back to Groq Llama 3.3 70B...');
-        }
-      }
-      // Fallback to Groq ONLY if Groq keys are configured
-      if (this.groqKeyPool.length > 0) {
-        return this.callGroqOpenSource<T>(prompt);
-      }
+    if (this.groqKeyPool.length > 0) {
+      return await this.callGroqOpenSource<T>(prompt);
     }
-
+    console.warn('[AI_GATEWAY] ⚠️ No Groq API keys available.');
     return null;
   }
 
-  /// Specialized method: Enrich movie with Arabic metadata, authentic studio identification & micro-genres
+  /// Specialized method: Enrich movie with Arabic metadata, authentic studio identification & micro-genres via Groq Llama 3.3 70B
   public async enrichMovieWithAi(params: {
     title: string;
     cleanTitle?: string;
@@ -610,10 +575,11 @@ export class GeminiPoolService {
     currentStudioIds?: number[];
   }): Promise<AiEnrichmentResult | null> {
     const prompt = `You are the lead cinema categorization and localization engine for a premium streaming platform (Teraflix).
-Analyze the following movie and provide:
-1. "title_ar": The official, most widely recognized cinematic Arabic title. (e.g. "Interstellar" -> "بين النجوم", "Inception" -> "استهلال / بداية", "The Dark Knight" -> "فارس الظلام", "The Godfather" -> "العراب").
-2. "overview_ar": A compelling, fluent, cinematic Arabic synopsis (2-4 sentences) translated naturally without robotic literal phrasing.
-3. "tagline_ar": A dramatic, catchy Arabic streaming tagline (e.g. "في الفضاء... لا أحد يستطيع سماع صراخك").
+Analyze the following movie and provide authentic Arabic cultural localization and studio attribution:
+
+1. "title_ar": The official, most widely recognized cinematic Arabic title. (e.g. "Interstellar" -> "بين النجوم", "Inception" -> "استهلال", "The Dark Knight" -> "فارس الظلام", "The Godfather" -> "العراب", "Fight Club" -> "نادي القتال", "Avatar" -> "أفاتار"). Never return empty string; if no official translation exists, provide an accurate, natural Arabic title transliteration/translation.
+2. "overview_ar": A compelling, fluent, cinematic Arabic synopsis (2-4 sentences in Modern Standard Arabic) explaining the plot naturally. Never return empty string.
+3. "tagline_ar": A dramatic, catchy Arabic streaming tagline (e.g. "في الفضاء... لا أحد يستطيع سماع صراخك" or "عقلك هو مسرح الجريمة"). Never return empty string.
 4. "primary_studio": The authentic production company or original streaming brand behind this movie (e.g. "Netflix", "Walt Disney Pictures", "Warner Bros. Pictures", "Universal Pictures", "Paramount Pictures", "Sony Pictures", "Apple Studios", "Amazon MGM Studios", "A24", "Neon", "Studio Ghibli", "20th Century Studios", "Lionsgate", "Marvel Studios", "Pixar", "Blumhouse Productions", "Focus Features", "Searchlight Pictures", "StudioCanal").
 5. "studio_id": Numeric TMDB ID matching the studio:
    - Netflix: 178464
@@ -663,8 +629,8 @@ Respond ONLY in valid JSON conforming to this schema:
   "vibe_badges": ["string"]
 }`;
 
-    // Gemini Primary for Arabic Cultural Localization, Groq as High-Speed Fallback
-    return await this.generateJson<AiEnrichmentResult>(prompt, { preference: 'gemini' });
+    // Exclusively call Groq Llama 3.3 70B
+    return await this.callGroqOpenSource<AiEnrichmentResult>(prompt);
   }
 
   /// Returns full health metrics of the Gemini pool

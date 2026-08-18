@@ -255,15 +255,19 @@ export class CategorizerService {
         }
       }
 
-      // ── TIER 4: GEMINI AI MULTI-KEY ENRICHMENT BOOSTER (ARABIC & STUDIO ATTRIBUTION) ──
+      // ── TIER 4: GROQ OPEN-SOURCE AI BOOSTER (ARABIC LOCALIZATION & STUDIO ATTRIBUTION) ──
       const { GeminiPoolService } = await import('./gemini_pool.service');
       const geminiPool = GeminiPoolService.getInstance();
 
-      const needsArabic = (!movie.title_ar && !arMeta.titleAr) || (!movie.overview_ar && !arMeta.overviewAr);
+      const hasMissingArabic =
+        (!movie.title_ar || !movie.title_ar.trim() || !arMeta.titleAr) ||
+        (!movie.overview_ar || !movie.overview_ar.trim() || !arMeta.overviewAr) ||
+        (!movie.tagline_ar || !movie.tagline_ar.trim() || !arMeta.taglineAr);
       const needsStudio = studiosJson.length === 0;
+      const needsKeywords = keywordsJson.length < 3;
 
-      // Only run during regular scanning if explicitly enabled by admin toggle
-      if (geminiPool.isAiEnabled() && (needsArabic || needsStudio)) {
+      // When runtime AI is enabled, Groq (Llama 3.3 70B) handles all localization and gap-filling
+      if (geminiPool.isAiEnabled() && (hasMissingArabic || needsStudio || needsKeywords)) {
         try {
           const aiResult = await geminiPool.enrichMovieWithAi({
             title: tmdbDetails?.title || movie.title,
@@ -274,9 +278,16 @@ export class CategorizerService {
           });
 
           if (aiResult) {
-            if (!movie.title_ar && !arMeta.titleAr && aiResult.title_ar) arMeta.titleAr = aiResult.title_ar;
-            if (!movie.overview_ar && !arMeta.overviewAr && aiResult.overview_ar) arMeta.overviewAr = aiResult.overview_ar;
-            if (!movie.tagline_ar && !arMeta.taglineAr && aiResult.tagline_ar) arMeta.taglineAr = aiResult.tagline_ar;
+            // Arabic localization from Groq AI
+            if ((!movie.title_ar || !movie.title_ar.trim()) && (!arMeta.titleAr || !arMeta.titleAr.trim()) && aiResult.title_ar) {
+              arMeta.titleAr = aiResult.title_ar.trim();
+            }
+            if ((!movie.overview_ar || !movie.overview_ar.trim()) && (!arMeta.overviewAr || !arMeta.overviewAr.trim()) && aiResult.overview_ar) {
+              arMeta.overviewAr = aiResult.overview_ar.trim();
+            }
+            if ((!movie.tagline_ar || !movie.tagline_ar.trim()) && (!arMeta.taglineAr || !arMeta.taglineAr.trim()) && aiResult.tagline_ar) {
+              arMeta.taglineAr = aiResult.tagline_ar.trim();
+            }
 
             // Merge AI studio if missing
             if (studiosJson.length === 0 && aiResult.primary_studio && aiResult.studio_id) {
@@ -288,17 +299,26 @@ export class CategorizerService {
               });
             }
 
+            // Clean false positive studios if flagged by AI
+            if (Array.isArray(aiResult.false_positive_studio_ids_to_remove) && aiResult.false_positive_studio_ids_to_remove.length > 0) {
+              for (let i = studiosJson.length - 1; i >= 0; i--) {
+                if (aiResult.false_positive_studio_ids_to_remove.includes(studiosJson[i].id)) {
+                  studiosJson.splice(i, 1);
+                }
+              }
+            }
+
             // Merge AI thematic micro-genres
             if (Array.isArray(aiResult.thematic_keywords)) {
               aiResult.thematic_keywords.forEach((kw: string, idx: number) => {
-                if (!keywordsJson.some((k: any) => k.name.toLowerCase() === kw.toLowerCase())) {
+                if (kw && !keywordsJson.some((k: any) => k.name.toLowerCase() === kw.toLowerCase())) {
                   keywordsJson.push({ id: 899000 + idx, name: kw });
                 }
               });
             }
           }
         } catch (aiErr: any) {
-          console.warn(`[CATEGORIZER] Gemini AI booster skipped for #${movie.id}:`, aiErr.message);
+          console.warn(`[CATEGORIZER] Groq AI booster skipped for #${movie.id}:`, aiErr.message);
         }
       }
 
@@ -327,15 +347,13 @@ export class CategorizerService {
       };
 
       // Arabic localization: Title, Overview, Tagline, Cast (cooperative non-destructive merge)
-      if (!movie.title_ar && arMeta.titleAr) updatePayload.title_ar = arMeta.titleAr;
-      else if (movie.title_ar) updatePayload.title_ar = movie.title_ar;
+      const finalTitleAr = (movie.title_ar && movie.title_ar.trim()) || (arMeta.titleAr && arMeta.titleAr.trim()) || null;
+      const finalOverviewAr = (movie.overview_ar && movie.overview_ar.trim()) || (arMeta.overviewAr && arMeta.overviewAr.trim()) || null;
+      const finalTaglineAr = (movie.tagline_ar && movie.tagline_ar.trim()) || (arMeta.taglineAr && arMeta.taglineAr.trim()) || null;
 
-      if (!movie.overview_ar && arMeta.overviewAr) updatePayload.overview_ar = arMeta.overviewAr;
-      else if (movie.overview_ar) updatePayload.overview_ar = movie.overview_ar;
-
-      if (!movie.tagline_ar && arMeta.taglineAr) updatePayload.tagline_ar = arMeta.taglineAr;
-      else if (movie.tagline_ar) updatePayload.tagline_ar = movie.tagline_ar;
-
+      if (finalTitleAr) updatePayload.title_ar = finalTitleAr;
+      if (finalOverviewAr) updatePayload.overview_ar = finalOverviewAr;
+      if (finalTaglineAr) updatePayload.tagline_ar = finalTaglineAr;
       if (arMeta.castJsonAr) updatePayload.cast_json_ar = arMeta.castJsonAr;
 
       // Update database row
