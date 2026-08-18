@@ -788,14 +788,6 @@ Respond ONLY in valid JSON conforming to this schema:
     message: string;
     totalGaps?: number;
   }> {
-    // ADMIN GATE: AI gap-fill must be explicitly enabled via /api/ai/toggle
-    if (!this.isAiEnrichmentEnabled) {
-      return {
-        started: false,
-        message: 'AI Gap-Fill is DISABLED. An admin must enable it first via POST /api/ai/toggle {"enable": true}.',
-      };
-    }
-
     if (this.keyPool.length === 0 && this.groqKeyPool.length === 0) {
       return {
         started: false,

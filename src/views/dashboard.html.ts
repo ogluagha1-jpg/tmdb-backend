@@ -1620,9 +1620,7 @@ export function renderDashboardHtml(): string {
             }
           }
 
-          const fullyEnriched = s.fullyEnrichedMovies !== undefined ? s.fullyEnrichedMovies : Math.max(0, (s.totalMovies || 0) - (s.gapMoviesCount || 0));
-          const gapInfo = s.gapMoviesCount > 0 ? ' • ' + s.gapMoviesCount.toLocaleString() + ' gaps pending' : ' • 100% Saturated';
-          safeSetText('scanner-progress-label', (fullyEnriched || 0).toLocaleString() + ' / ' + (s.totalMovies || 0).toLocaleString() + ' (' + s.completionPct + '%)' + gapInfo);
+          safeSetText('scanner-progress-label', (s.enrichedMovies || 0).toLocaleString() + ' / ' + (s.totalMovies || 10244).toLocaleString() + ' (' + s.completionPct + '%)');
           safeSetWidth('scanner-progress-fill', s.completionPct || 0);
           safeSetText('scanner-current-movie', s.lastScannedTitle || 'Idle / Saturated');
           safeSetText('scanner-session-count', (s.totalProcessedThisSession || 0).toLocaleString());

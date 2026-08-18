@@ -1,47 +1,33 @@
 import { SupabaseService } from './supabase.service';
 import { TmdbService } from './tmdb.service';
 import { ImdbService } from './imdb.service';
-import { CinemetaService } from './cinemeta.service';
-import { StreamingSourcesService } from './streaming_sources.service';
-import { CategoryGeneratorService } from './category_generator.service';
 
-/**
- * CategorizerService — Cooperative Multi-Engine Metadata & Taxonomist Service
- *
- * Tier 1 (Always Active Non-AI Multi-Engine):
- *   - Wikipedia Arabic Interlanguage API
- *   - TMDB Arabic & Credits (ar-SA overview, Arabic tagline, Arabic cast)
- *   - TMDB Details Fallback (English tagline, director, cast, trailer, keywords)
- *   - Cinemeta Stremio CDN (runtime, description, director, ratings)
- *   - OMDb / IMDb API (awards, ratings, age classification)
- *   - Streaming Sources Knowledge Graph (Netflix, Apple TV+, Disney+, HBO, Amazon Prime, Paramount+)
- *
- * Tier 2 (Opt-in by Admin via POST /api/ai/toggle):
- *   - Gemini / Groq Pool for remaining untranslated gaps
- */
 export class CategorizerService {
   private tmdb: TmdbService;
   private imdb: ImdbService;
-  private cinemeta: CinemetaService;
-  private generator: CategoryGeneratorService;
 
   constructor() {
     this.tmdb = new TmdbService();
     this.imdb = new ImdbService();
-    this.cinemeta = CinemetaService.getInstance();
-    this.generator = new CategoryGeneratorService();
   }
 
-  /// Advanced title cleaner for scene release tags
-  public cleanTitle(rawTitle: string): string {
+  /// Advanced 50+ tag title cleaner for international releases and scene tags
+  private cleanTitle(rawTitle: string): string {
     if (!rawTitle) return '';
     return rawTitle
+      // 1. Remove bracketed/parenthesized info: (2021), [1080p], {4k}, (DE), (TR), [YTS.MX], etc.
       .replace(/[\(\[\{].*?[\)\]\}]/g, ' ')
+      // 2. Remove years (1900 - 2099)
       .replace(/\b(19\d\d|20\d\d)\b/g, ' ')
+      // 3. Remove resolution & source tags
       .replace(/\b(4k|2160p|1080p|1080i|720p|576p|480p|360p|uhd|fhd|hd|sd|bluray|blu-ray|bdrip|brrip|web-dl|webdl|webrip|web|hdrip|dvdrip|dvd|remux|vhs|cam|telesync|ts|hdcam|hdtc|hdtv|pdtv|dsr|screener|scr|r5)\b/gi, ' ')
+      // 4. Remove audio formats, codecs & container tags (e.g. aac5.1, ddp5.1, ac3, truehd, etc.)
       .replace(/\b(x264|x265|h264|h265|hevc|avc|av1|vp9|xvid|divx|10bit|8bit|hdr|hdr10|hdr10plus|dv|dovi|dolby\s*vision|atmos|ddp\d*(\.\d+)?|dd\d*(\.\d+)?|dts-hd|dts|ac3|aac\d*(\.\d+)?|mp3|flac|truehd|mp4|mkv|avi)\b/gi, ' ')
+      // 5. Remove edition, cut & language keywords
       .replace(/\b(extended|directors\s*cut|unrated|theatrical|remastered|special\s*edition|reloaded|repack|proper|internal|dubbed|subbed|multi|vostfr|sub|gespr)\b/gi, ' ')
+      // 6. Remove trailing release group hashes/tags e.g. -TERAFLIX, -YTS, -RARBG
       .replace(/-\s*[a-zA-Z0-9_\-]+$/gi, ' ')
+      // 7. Clean punctuation & excessive spaces
       .replace(/[._\-+]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -58,6 +44,7 @@ export class CategorizerService {
 
       if (executing.length >= limit) {
         await Promise.race(executing);
+        // Remove settled promises
         for (let i = executing.length - 1; i >= 0; i--) {
           const isSettled = await Promise.race([executing[i].then(() => true), Promise.resolve(false)]);
           if (isSettled) executing.splice(i, 1);
@@ -69,262 +56,370 @@ export class CategorizerService {
     return results;
   }
 
-  /**
-   * TIER 1: Non-AI Multi-Engine Gap Resolver (Deterministic & Free)
-   * Resolves missing tagline, tagline_ar, title_ar, overview_ar, director, cast, trailer, awards, studios
-   * using Wikipedia, Cinemeta, OMDB, TMDB Arabic & Streaming Knowledge Graph.
-   */
-  async resolveGapsWithNonAiEngines(movie: any, supabase: any): Promise<boolean> {
+  /// Enrich a single movie
+  public async enrichMovie(movie: any, supabase: any): Promise<boolean> {
     try {
-      const updates: any = {};
-      let modified = false;
+      let tmdbDetails: any = null;
+      let cinemetaMeta: any = null;
+      let omdbData: any = null;
 
-      const title = movie.title || '';
-      const tmdbTitle = movie.tmdb_title || '';
-      const effectiveTitle = tmdbTitle || this.cleanTitle(title);
-      const year = movie.year || (movie.release_date || '').slice(0, 4);
-
-      // 1. ARABIC METADATA RESOLUTION (TMDB ar-SA + WIKIPEDIA ARABIC FALLBACK)
-      const needsArabic = !movie.title_ar || !movie.overview_ar || !movie.tagline_ar;
-      if (needsArabic && movie.tmdb_id) {
-        try {
-          const arMeta = await this.tmdb.getArabicMetadata(movie.tmdb_id, effectiveTitle);
-          if (!movie.title_ar && arMeta.titleAr) {
-            updates.title_ar = arMeta.titleAr;
-            modified = true;
-          }
-          if (!movie.overview_ar && arMeta.overviewAr) {
-            updates.overview_ar = arMeta.overviewAr;
-            modified = true;
-          }
-          if (!movie.tagline_ar && arMeta.taglineAr) {
-            updates.tagline_ar = arMeta.taglineAr;
-            modified = true;
-          }
-          if (!movie.cast_json_ar && arMeta.castJsonAr && arMeta.castJsonAr.length > 0) {
-            updates.cast_json_ar = arMeta.castJsonAr;
-            modified = true;
-          }
-        } catch {}
+      // ── TIER 1: PRIMARY TMDB RESOLUTION ──
+      if (movie.tmdb_id && movie.tmdb_id > 0) {
+        tmdbDetails = await this.tmdb.getMovieDetails(movie.tmdb_id);
       }
 
-      // If title_ar still missing, query Wikipedia Arabic directly
-      if (!movie.title_ar && !updates.title_ar && effectiveTitle) {
-        try {
-          const wikiArabic = await this.tmdb.getWikipediaArabicTitle(effectiveTitle);
-          if (wikiArabic) {
-            updates.title_ar = wikiArabic;
-            modified = true;
+      if (!tmdbDetails) {
+        // Priority 1: Search using populated clean TMDB title from database
+        if (movie.tmdb_title && typeof movie.tmdb_title === 'string' && movie.tmdb_title.trim().length > 0) {
+          tmdbDetails = await this.tmdb.searchMovie(movie.tmdb_title.trim(), movie.year || movie.release_date);
+        }
+
+        // Priority 2: Fallback to searching with 50+ tag sanitized raw title
+        if (!tmdbDetails) {
+          const cleaned = this.cleanTitle(movie.title);
+          if (cleaned.length > 0) {
+            tmdbDetails = await this.tmdb.searchMovie(cleaned, movie.year || movie.release_date);
           }
-        } catch {}
-      }
-
-      // 2. ENGLISH TAGLINE, DIRECTOR, CAST, TRAILER, KEYWORDS (TMDB DETAILS FALLBACK)
-      const needsDetails = !movie.tagline || !movie.director || !movie.trailer_url || !movie.keywords_json || (Array.isArray(movie.keywords_json) && movie.keywords_json.length === 0);
-      if (needsDetails && movie.tmdb_id) {
-        try {
-          const details = await this.tmdb.getMovieDetails(movie.tmdb_id);
-          if (details) {
-            if (!movie.tagline && details.tagline) {
-              updates.tagline = details.tagline;
-              modified = true;
-            }
-            if (!movie.director && details.credits?.crew) {
-              const dir = details.credits.crew.find((c: any) => c.job === 'Director');
-              if (dir?.name) {
-                updates.director = dir.name;
-                modified = true;
-              }
-            }
-            if ((!movie.cast_json || (Array.isArray(movie.cast_json) && movie.cast_json.length === 0)) && details.credits?.cast) {
-              updates.cast_json = details.credits.cast.slice(0, 12).map((c: any) => ({
-                id: c.id,
-                name: c.name,
-                character: c.character,
-                profile_path: c.profile_path,
-              }));
-              modified = true;
-            }
-            if (!movie.trailer_url && details.videos?.results) {
-              const trailer = details.videos.results.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
-              if (trailer?.key) {
-                updates.trailer_key = trailer.key;
-                updates.trailer_site = 'YouTube';
-                updates.trailer_url = `https://www.youtube.com/watch?v=${trailer.key}`;
-                modified = true;
-              }
-            }
-            if ((!movie.keywords_json || (Array.isArray(movie.keywords_json) && movie.keywords_json.length === 0)) && details.keywords?.keywords) {
-              updates.keywords_json = details.keywords.keywords;
-              modified = true;
-            }
-            if (details.imdb_id && !movie.imdb_id) {
-              updates.imdb_id = details.imdb_id;
-              modified = true;
-            }
-          }
-        } catch {}
-      }
-
-      // 3. CINEMETA STREMIO CDN & OMDB (AWARDS, IMDB RATINGS, RUNTIME FALLBACK)
-      const targetImdbId = updates.imdb_id || movie.imdb_id;
-      if (targetImdbId && targetImdbId.startsWith('tt')) {
-        try {
-          const [cinemetaMeta, omdbData] = await Promise.all([
-            (!movie.director || !movie.overview) ? this.cinemeta.getMeta(targetImdbId).catch(() => null) : null,
-            this.imdb.getImdbData(targetImdbId).catch(() => null),
-          ]);
-
-          if (cinemetaMeta) {
-            if (!movie.director && !updates.director && cinemetaMeta.director && cinemetaMeta.director.length > 0) {
-              updates.director = cinemetaMeta.director[0];
-              modified = true;
-            }
-            if (!movie.overview && cinemetaMeta.description) {
-              updates.overview = cinemetaMeta.description;
-              modified = true;
-            }
-          }
-
-          if (omdbData) {
-            if (omdbData.awards && !movie.awards) {
-              updates.awards = omdbData.awards;
-              modified = true;
-            }
-          }
-        } catch {}
-      }
-
-      // 4. STREAMING ORIGINALS KNOWLEDGE GRAPH TAGGING
-      const streamingSources = StreamingSourcesService.getInstance();
-      await streamingSources.initialize();
-      const match = streamingSources.matchOriginal(title, tmdbTitle, year);
-      if (match) {
-        let studios = Array.isArray(movie.studios_json) ? [...movie.studios_json] : [];
-        if (!studios.some((s: any) => s.id === match.studioId)) {
-          studios.push({
-            id: match.studioId,
-            name: match.studioName,
-            logo_path: match.logoPath,
-            origin_country: 'US',
-          });
-          updates.studios_json = studios;
-          modified = true;
         }
       }
 
-      // ALWAYS STAMP enriched_at so the queue advances and never gets stuck
-      updates.enriched_at = new Date().toISOString();
+      // ── TIER 2 & 3: CINEMETA & OMDB SECONDARY FETCH ──
+      const targetImdbId = tmdbDetails?.imdb_id || movie.imdb_id;
+      if (targetImdbId && targetImdbId.startsWith('tt')) {
+        const [cinemetaRes, omdbRes] = await Promise.all([
+          (await import('./cinemeta.service')).CinemetaService.getInstance().getMeta(targetImdbId).catch(() => null),
+          this.imdb.getImdbData(targetImdbId).catch(() => null),
+        ]);
+        cinemetaMeta = cinemetaRes;
+        omdbData = omdbRes;
+      }
 
-      const { error: updErr } = await supabase
+      // If TMDB completely failed, fallback to Cinemeta search
+      if (!tmdbDetails && cinemetaMeta) {
+        tmdbDetails = {
+          id: null,
+          title: cinemetaMeta.name || movie.title,
+          overview: cinemetaMeta.description || '',
+          runtime: cinemetaMeta.runtime ? parseInt(cinemetaMeta.runtime, 10) : undefined,
+          vote_average: cinemetaMeta.imdbRating,
+          popularity: 10.0,
+          release_date: cinemetaMeta.year ? `${cinemetaMeta.year}-01-01` : undefined,
+          original_language: 'en',
+          imdb_id: targetImdbId,
+        };
+      }
+
+      if (!tmdbDetails && !cinemetaMeta && !omdbData) {
+        // Stamp enriched_at on unmatchable orphan titles to prevent infinite scanner retry loops
+        await supabase
+          .from('movies')
+          .update({
+            enriched_at: new Date().toISOString(),
+          })
+          .eq('id', movie.id);
+        return false;
+      }
+
+      // ── ARABIC LOCALIZATION TIER (TMDB + WIKIPEDIA ARABIC FALLBACK) ──
+      let arMeta: any = {};
+      const needsArabicMetadata = !movie.title_ar || !movie.overview_ar || !movie.tagline_ar;
+      if (needsArabicMetadata && tmdbDetails?.id) {
+        arMeta = await this.tmdb.getArabicMetadata(tmdbDetails.id, tmdbDetails.title || movie.title);
+      }
+
+      // ── DIRECTOR COOPERATIVE RESOLUTION ──
+      let director: string | undefined;
+      if (tmdbDetails?.credits?.crew) {
+        const dir = tmdbDetails.credits.crew.find((c: any) => c.job === 'Director');
+        if (dir) director = dir.name;
+      }
+      if (!director && cinemetaMeta?.director && cinemetaMeta.director.length > 0) {
+        director = cinemetaMeta.director[0];
+      }
+
+      // ── TRAILER COOPERATIVE RESOLUTION ──
+      let trailerUrl: string | undefined;
+      let trailerKey: string | undefined;
+      let trailerSite: string | undefined;
+      if (tmdbDetails?.videos?.results) {
+        const trailer = tmdbDetails.videos.results.find(
+          (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
+        );
+        if (trailer) {
+          trailerKey = trailer.key;
+          trailerSite = 'YouTube';
+          trailerUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
+        }
+      }
+      if (!trailerKey && cinemetaMeta?.trailers && cinemetaMeta.trailers.length > 0) {
+        trailerKey = cinemetaMeta.trailers[0].source;
+        trailerSite = 'YouTube';
+        trailerUrl = `https://www.youtube.com/watch?v=${trailerKey}`;
+      }
+
+      // ── CAST COOPERATIVE RESOLUTION ──
+      let castJson: any[] = (tmdbDetails?.credits?.cast || [])
+        .slice(0, 10)
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character,
+          profile_path: c.profile_path,
+        }));
+
+      if (castJson.length === 0 && cinemetaMeta?.cast && cinemetaMeta.cast.length > 0) {
+        castJson = cinemetaMeta.cast.slice(0, 10).map((name: string, idx: number) => ({
+          id: 888000 + idx,
+          name,
+          character: '',
+          profile_path: null,
+        }));
+      }
+
+      // ── GENRES & KEYWORDS COOPERATIVE RESOLUTION ──
+      const genresJson: any[] = (tmdbDetails?.genres || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+      }));
+      if (genresJson.length === 0 && cinemetaMeta?.genres && cinemetaMeta.genres.length > 0) {
+        cinemetaMeta.genres.forEach((g: string, idx: number) => {
+          genresJson.push({ id: 777000 + idx, name: g });
+        });
+      }
+
+      const keywordsJson: any[] = (tmdbDetails?.keywords?.keywords || []).map((k: any) => ({
+        id: k.id,
+        name: k.name,
+      }));
+
+      // ── OMDB / ROTTEN TOMATOES / AWARDS ENRICHMENT ──
+      if (omdbData) {
+        if (omdbData.rottenTomatoesScore) {
+          keywordsJson.push({ id: 999901, name: `Rotten Tomatoes ${omdbData.rottenTomatoesScore}%` });
+          if (omdbData.rottenTomatoesScore >= 85) {
+            keywordsJson.push({ id: 999902, name: 'Certified Fresh' });
+          }
+        }
+        if (omdbData.awards && /oscar|academy award/i.test(omdbData.awards)) {
+          keywordsJson.push({ id: 999903, name: 'Oscar Winner' });
+        }
+        if (omdbData.isTop250) {
+          keywordsJson.push({ id: 999904, name: 'IMDb Top 250' });
+        }
+      }
+
+      // ── PRODUCTION STUDIOS & KNOWLEDGE GRAPH (COOPERATIVE MERGE) ──
+      // Preserve all studios already saved by the local application
+      const localStudios = Array.isArray(movie.studios_json) ? movie.studios_json : [];
+      const tmdbStudios = (tmdbDetails?.production_companies || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        logo_path: s.logo_path || null,
+        origin_country: s.origin_country || null,
+      }));
+
+      const studiosMap = new Map<any, any>();
+      localStudios.forEach((s: any) => {
+        if (s && (s.id || s.name)) studiosMap.set(s.id || s.name, s);
+      });
+      tmdbStudios.forEach((s: any) => {
+        const key = s.id || s.name;
+        if (key && !studiosMap.has(key)) {
+          studiosMap.set(key, s);
+        }
+      });
+      const studiosJson: any[] = Array.from(studiosMap.values());
+
+      // Extract release year
+      const releaseDate = tmdbDetails?.release_date || movie.release_date || (cinemetaMeta?.year ? `${cinemetaMeta.year}-01-01` : '');
+      const year = releaseDate && releaseDate.length >= 4 ? releaseDate.substring(0, 4) : (movie.year || cinemetaMeta?.year);
+
+      // Multi-Source Streaming Originals Knowledge Graph (Wikipedia / Wikidata)
+      const hasMajorTheatricalStudio = studiosJson.some((s: any) =>
+        [127928, 25, 43, 174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559, 4, 24955, 2348, 8302, 333, 2, 6125, 5218, 420, 32353, 11106, 13252].includes(s.id)
+      );
+
+      if (!hasMajorTheatricalStudio) {
+        const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
+        const matchedOriginal = streamingSources.matchOriginal(movie.title, tmdbDetails?.title, year);
+        if (matchedOriginal) {
+          const alreadyPresent = studiosJson.some((s: any) => s.id === matchedOriginal.studioId);
+          if (!alreadyPresent) {
+            studiosJson.push({
+              id: matchedOriginal.studioId,
+              name: matchedOriginal.studioName,
+              logo_path: matchedOriginal.logoPath,
+              origin_country: 'US',
+            });
+          }
+        }
+      }
+
+      // ── TIER 4: GEMINI AI MULTI-KEY ENRICHMENT BOOSTER (ARABIC & STUDIO ATTRIBUTION) ──
+      const { GeminiPoolService } = await import('./gemini_pool.service');
+      const geminiPool = GeminiPoolService.getInstance();
+
+      const needsArabic = (!movie.title_ar && !arMeta.titleAr) || (!movie.overview_ar && !arMeta.overviewAr);
+      const needsStudio = studiosJson.length === 0;
+
+      // Only run during regular scanning if explicitly enabled by admin toggle
+      if (geminiPool.isAiEnabled() && (needsArabic || needsStudio)) {
+        try {
+          const aiResult = await geminiPool.enrichMovieWithAi({
+            title: tmdbDetails?.title || movie.title,
+            cleanTitle: this.cleanTitle(movie.title),
+            year: year,
+            overview: tmdbDetails?.overview || cinemetaMeta?.description || movie.overview,
+            existingGenres: genresJson.map((g: any) => g.name),
+          });
+
+          if (aiResult) {
+            if (!movie.title_ar && !arMeta.titleAr && aiResult.title_ar) arMeta.titleAr = aiResult.title_ar;
+            if (!movie.overview_ar && !arMeta.overviewAr && aiResult.overview_ar) arMeta.overviewAr = aiResult.overview_ar;
+            if (!movie.tagline_ar && !arMeta.taglineAr && aiResult.tagline_ar) arMeta.taglineAr = aiResult.tagline_ar;
+
+            // Merge AI studio if missing
+            if (studiosJson.length === 0 && aiResult.primary_studio && aiResult.studio_id) {
+              studiosJson.push({
+                id: aiResult.studio_id,
+                name: aiResult.primary_studio,
+                logo_path: null,
+                origin_country: 'US',
+              });
+            }
+
+            // Merge AI thematic micro-genres
+            if (Array.isArray(aiResult.thematic_keywords)) {
+              aiResult.thematic_keywords.forEach((kw: string, idx: number) => {
+                if (!keywordsJson.some((k: any) => k.name.toLowerCase() === kw.toLowerCase())) {
+                  keywordsJson.push({ id: 899000 + idx, name: kw });
+                }
+              });
+            }
+          }
+        } catch (aiErr: any) {
+          console.warn(`[CATEGORIZER] Gemini AI booster skipped for #${movie.id}:`, aiErr.message);
+        }
+      }
+
+      // ── BUILD CORE SERVER PAYLOAD (ARABIC LOCALIZATION, STUDIOS, & CATEGORIES METADATA) ──
+      const updatePayload: any = {
+        tmdb_id: tmdbDetails?.id || movie.tmdb_id,
+        tmdb_title: tmdbDetails?.title || cinemetaMeta?.name || movie.title,
+        genres_json: genresJson,
+        keywords_json: keywordsJson,
+        studios_json: studiosJson,
+        overview: tmdbDetails?.overview || cinemetaMeta?.description || movie.overview || '',
+        runtime: tmdbDetails?.runtime || (cinemetaMeta?.runtime ? parseInt(cinemetaMeta.runtime, 10) : undefined) || movie.runtime,
+        vote_average: tmdbDetails?.vote_average || omdbData?.imdbRating || cinemetaMeta?.imdbRating || movie.vote_average,
+        popularity: tmdbDetails?.popularity || movie.popularity || 10.0,
+        tagline: tmdbDetails?.tagline || movie.tagline,
+        original_language: tmdbDetails?.original_language || movie.original_language || 'en',
+        director: director || movie.director,
+        trailer_url: trailerUrl || movie.trailer_url,
+        trailer_key: trailerKey || movie.trailer_key,
+        trailer_site: trailerSite || movie.trailer_site,
+        cast_json: castJson,
+        release_date: releaseDate,
+        year: year,
+        imdb_id: targetImdbId,
+        enriched_at: new Date().toISOString(),
+      };
+
+      // Arabic localization: Title, Overview, Tagline, Cast (cooperative non-destructive merge)
+      if (!movie.title_ar && arMeta.titleAr) updatePayload.title_ar = arMeta.titleAr;
+      else if (movie.title_ar) updatePayload.title_ar = movie.title_ar;
+
+      if (!movie.overview_ar && arMeta.overviewAr) updatePayload.overview_ar = arMeta.overviewAr;
+      else if (movie.overview_ar) updatePayload.overview_ar = movie.overview_ar;
+
+      if (!movie.tagline_ar && arMeta.taglineAr) updatePayload.tagline_ar = arMeta.taglineAr;
+      else if (movie.tagline_ar) updatePayload.tagline_ar = movie.tagline_ar;
+
+      if (arMeta.castJsonAr) updatePayload.cast_json_ar = arMeta.castJsonAr;
+
+      // Update database row
+      const { error: updateErr } = await supabase
         .from('movies')
-        .update(updates)
+        .update(updatePayload)
         .eq('id', movie.id);
 
-      if (!updErr) return modified;
-
-      // Safe retry if column does not exist
-      if (updErr && /awards|cast_json_ar/i.test(updErr.message)) {
-        delete updates.awards;
-        delete updates.cast_json_ar;
-        const retryRes = await supabase.from('movies').update(updates).eq('id', movie.id);
-        return !retryRes.error && modified;
+      if (updateErr) {
+        console.error(`[CATEGORIZER] Failed to update movie #${movie.id}:`, updateErr.message);
+        return false;
       }
 
-      return false;
-    } catch {
+      return true;
+    } catch (e: any) {
+      console.error(`[CATEGORIZER] Movie #${movie.id} (${movie.title}) enrichment error:`, e.message);
       return false;
     }
   }
 
-  /**
-   * Cooperative Multi-Engine Batch Sync:
-   * 1. Fetches oldest/unenriched records (prioritizes NULL enriched_at)
-   * 2. Runs Tier 1 Multi-Engine Gap Filling (Wikipedia, Cinemeta, OMDB, TMDB Arabic & Taglines)
-   * 3. Runs Tier 2 AI Booster if enabled by admin
-   * 4. Regenerates dynamic home categories
-   */
+  /// Scans and enriches un-categorized or newly added movies in the Supabase database with parallel execution
   async syncUncategorizedMovies(
     batchSize: number = 100,
-    onProgressOrOffset?: ((title: string, wasUpdated?: boolean) => void) | number
-  ): Promise<{ processed: number; updated: number; gapsIdentified: number }> {
+    offset: number = 0
+  ): Promise<{ processed: number; updated: number }> {
     const supabase = SupabaseService.getClient();
-    const onProgress = typeof onProgressOrOffset === 'function' ? onProgressOrOffset : undefined;
-    const offset = typeof onProgressOrOffset === 'number' ? onProgressOrOffset : 0;
 
-    // 1. Tag streaming originals across database
-    const originalsResult = await this.syncMultiSourceStreamingOriginals(Math.min(batchSize, 200));
-
-    // 2. Fetch movies ordered by oldest enriched_at first (so new arrivals are #1 priority)
-    let query = supabase
+    // Fetch batch using range pagination to guarantee we cover all 10,244 movies
+    const { data: movies, error } = await supabase
       .from('movies')
-      .select('id, title, tmdb_title, tmdb_id, imdb_id, year, release_date, tagline, tagline_ar, title_ar, overview_ar, director, cast_json, cast_json_ar, keywords_json, studios_json, trailer_url, enriched_at', { count: 'exact' })
-      .order('enriched_at', { ascending: true, nullsFirst: true });
+      .select(
+        'id, title, tmdb_id, year, release_date, genres_json, keywords_json, studios_json, poster_path, backdrop_path, title_ar'
+      )
+      .order('id', { ascending: true })
+      .range(offset, offset + batchSize - 1);
 
-    if (offset > 0) {
-      query = query.range(offset, offset + batchSize - 1);
-    } else {
-      query = query.limit(batchSize);
+    if (error) {
+      console.error('[CATEGORIZER] Error querying movies from Supabase:', error.message);
+      return { processed: 0, updated: 0 };
     }
-
-    const { data: movies, count: totalGaps } = await query;
 
     if (!movies || movies.length === 0) {
-      return { processed: 0, updated: 0, gapsIdentified: 0 };
+      return { processed: 0, updated: 0 };
     }
 
-    const gapsCount = totalGaps || movies.length;
-    let nonAiUpdated = 0;
-
-    // 3. RUN TIER 1 NON-AI MULTI-ENGINE RESOLVER
-    console.log(`[CATEGORIZER] 🔍 Scanning ${movies.length} movies with Tier 1 Multi-Engine...`);
-    const results = await this.pMap(movies, 8, async (m) => {
-      const updated = await this.resolveGapsWithNonAiEngines(m, supabase);
-      if (onProgress) onProgress(`${m.title} (#${m.id})`, updated);
-      return updated;
+    // Filter to movies that actually need enrichment (missing studios, arabic, keywords, or cast)
+    const needsEnrichment = movies.filter((m: any) => {
+      const hasStudios = Array.isArray(m.studios_json) && m.studios_json.length > 0;
+      const hasKeywords = Array.isArray(m.keywords_json) && m.keywords_json.length > 0;
+      const hasArabic = !!m.title_ar && m.title_ar.trim().length > 0;
+      return !hasStudios || !hasKeywords || !hasArabic || !m.tmdb_id;
     });
 
-    nonAiUpdated = results.filter(Boolean).length;
-    console.log(`[CATEGORIZER] ✅ Tier 1 Multi-Engine enriched: ${nonAiUpdated}/${movies.length} titles.`);
-
-    // 4. RUN TIER 2 AI BOOSTER (ONLY if explicitly enabled by admin)
-    let aiUpdated = 0;
-    try {
-      const { GeminiPoolService } = await import('./gemini_pool.service');
-      const pool = GeminiPoolService.getInstance();
-      const metrics = pool.getPoolMetrics();
-      const hasAiKeys = metrics.totalKeys > 0 || (metrics.groq?.isConfigured ?? false);
-
-      if (hasAiKeys && pool.isAiEnabled() && !metrics.cooperativeScan.isRunning) {
-        console.log(`[CATEGORIZER] 🧠 Admin AI Boost is ENABLED. Launching AI gap-fill for remaining gaps...`);
-        await pool.startCooperativeGapScan({ maxTitles: Math.min(gapsCount, batchSize) });
-        aiUpdated = pool.getPoolMetrics().cooperativeScan.enriched;
-      }
-    } catch (err: any) {
-      console.warn('[CATEGORIZER] AI boost notice:', err.message);
+    if (needsEnrichment.length === 0) {
+      return { processed: movies.length, updated: 0 };
     }
 
-    // 5. Regenerate dynamic home categories
-    await this.generator.generateAndSyncCategories().catch((e) => {
-      console.error('[CATEGORIZER] Error syncing categories:', e.message);
-    });
+    console.log(
+      `[CATEGORIZER] [Offset ${offset}] Found ${needsEnrichment.length}/${movies.length} movies needing enrichment. Processing with concurrency = 10...`
+    );
 
-    return {
-      processed: movies.length,
-      updated: originalsResult.tagged + nonAiUpdated + aiUpdated,
-      gapsIdentified: gapsCount,
-    };
+    // Process in parallel batches of 10
+    const results = await this.pMap(needsEnrichment, 10, (movie) =>
+      this.enrichMovie(movie, supabase)
+    );
+    const updatedCount = results.filter(Boolean).length;
+
+    console.log(
+      `[CATEGORIZER] [Offset ${offset}] Enrichment finished: ${updatedCount}/${needsEnrichment.length} successfully updated.`
+    );
+    return { processed: movies.length, updated: updatedCount };
   }
 
-  /// Fast multi-source knowledge graph sync across titles in Supabase
+  /// Fast multi-source knowledge graph sync across all 10,244 titles in Supabase
   async syncMultiSourceStreamingOriginals(batchSize: number = 200): Promise<{ processed: number; tagged: number }> {
-    const streamingSources = StreamingSourcesService.getInstance();
+    const streamingSources = (await import('./streaming_sources.service')).StreamingSourcesService.getInstance();
     await streamingSources.initialize();
 
     const supabase = SupabaseService.getClient();
     let offset = 0;
     let totalTagged = 0;
     let totalProcessed = 0;
+
+    console.log('[CATEGORIZER] 🌐 Starting Multi-Source Streaming Originals Sync across database...');
 
     while (true) {
       const { data: movies, error } = await supabase
@@ -361,6 +456,7 @@ export class CategorizerService {
 
             if (!updateErr) {
               totalTagged++;
+              console.log(`[CATEGORIZER] 🏷️ Tagged [${movie.id}] "${movie.title}" as ${match.studioName}`);
             }
           }
         }
@@ -368,9 +464,10 @@ export class CategorizerService {
 
       totalProcessed += movies.length;
       offset += movies.length;
-      if (movies.length < batchSize) break;
+      console.log(`[CATEGORIZER] Multi-source sync progress: ${offset}/10244 movies checked, ${totalTagged} originals tagged.`);
     }
 
+    console.log(`[CATEGORIZER] 🎉 Multi-Source sync finished! Tagged ${totalTagged} originals.`);
     return { processed: totalProcessed, tagged: totalTagged };
   }
 }
