@@ -7,6 +7,7 @@ export interface AutoScannerStatus {
   isPaused: boolean;
   totalMovies: number;
   enrichedMovies: number;
+  fullyEnrichedMovies: number;
   unenrichedRemaining: number;
   gapMoviesCount: number;
   completionPct: number;
@@ -23,11 +24,12 @@ export interface AutoScannerStatus {
 /**
  * AutoScannerService — Real-Time Cooperative Multi-Engine Background Scanner
  *
- * Real-time features:
- * 1. Watches for new database entries every 5 seconds (0 wait time on new Python inserts)
- * 2. Processes backlog in continuous rapid ticks (500ms between batches)
- * 3. Updates `lastScannedTitle` in real-time for live UI dashboard reflection
- * 4. Advances database queue automatically (stamps `enriched_at` on every title)
+ * Accurate Metric Logic:
+ * - `totalMovies`: Total rows in database
+ * - `gapMoviesCount`: Movies still missing Arabic metadata, taglines, or studio tags
+ * - `fullyEnrichedMovies`: `totalMovies - gapMoviesCount`
+ * - `completionPct`: `(fullyEnrichedMovies / totalMovies) * 100`
+ * - `totalProcessedThisSession`: Increments live on every single title evaluated
  */
 export class AutoScannerService {
   private static instance: AutoScannerService;
@@ -54,6 +56,16 @@ export class AutoScannerService {
       AutoScannerService.instance = new AutoScannerService();
     }
     return AutoScannerService.instance;
+  }
+
+  /// Progress callback that live-increments session metrics
+  private handleProgress(title: string, wasUpdated: boolean = false): void {
+    this.lastScannedTitle = title;
+    this.lastActiveAt = new Date().toISOString();
+    this.totalProcessedThisSession++;
+    if (wasUpdated) {
+      this.totalGapFilledThisSession++;
+    }
   }
 
   /// Start or resume real-time cooperative scanner
@@ -104,14 +116,10 @@ export class AutoScannerService {
     console.log('[AUTO-SCANNER] ✅ Catalogue timestamps reset. Starting active loop...');
     this.start();
 
-    // Trigger immediate first batch
-    const res = await this.categorizer.syncUncategorizedMovies(100, (title) => {
-      this.lastScannedTitle = title;
-      this.lastActiveAt = new Date().toISOString();
+    // Trigger immediate first batch with live callback
+    const res = await this.categorizer.syncUncategorizedMovies(100, (title, updated) => {
+      this.handleProgress(title, updated);
     });
-
-    this.totalProcessedThisSession += res.processed;
-    this.totalGapFilledThisSession += res.updated;
 
     return { resetCount: res.processed };
   }
@@ -122,13 +130,10 @@ export class AutoScannerService {
     this.lastScannedTitle = `Processing batch (${batchSize} titles)...`;
     console.log(`[AUTO-SCANNER] 📋 Running cooperative batch scan (limit: ${batchSize})...`);
 
-    const result = await this.categorizer.syncUncategorizedMovies(batchSize, (title) => {
-      this.lastScannedTitle = title;
-      this.lastActiveAt = new Date().toISOString();
+    const result = await this.categorizer.syncUncategorizedMovies(batchSize, (title, updated) => {
+      this.handleProgress(title, updated);
     });
 
-    this.totalProcessedThisSession += result.processed;
-    this.totalGapFilledThisSession += result.updated;
     this.lastScannedTitle = `Batch complete: ${result.updated}/${result.processed} updated`;
 
     return {
@@ -165,13 +170,9 @@ export class AutoScannerService {
           const batchSize = Math.min(unenrichedCount, 50);
           console.log(`[AUTO-SCANNER] ⚡ Real-time backlog: ${unenrichedCount} unenriched movies found. Processing batch of ${batchSize}...`);
 
-          const result = await this.categorizer.syncUncategorizedMovies(batchSize, (title) => {
-            this.lastScannedTitle = title;
-            this.lastActiveAt = new Date().toISOString();
+          await this.categorizer.syncUncategorizedMovies(batchSize, (title, updated) => {
+            this.handleProgress(title, updated);
           });
-
-          this.totalProcessedThisSession += result.processed;
-          this.totalGapFilledThisSession += result.updated;
 
           // Short breather between active batches (500ms) to allow rapid processing
           await this.delay(500);
@@ -183,21 +184,17 @@ export class AutoScannerService {
           const batchSize = Math.min(gapCount, 25);
           console.log(`[AUTO-SCANNER] 🔍 Gap resolution: ${gapCount} titles with missing fields. Processing batch of ${batchSize}...`);
 
-          const result = await this.categorizer.syncUncategorizedMovies(batchSize, (title) => {
-            this.lastScannedTitle = title;
-            this.lastActiveAt = new Date().toISOString();
+          await this.categorizer.syncUncategorizedMovies(batchSize, (title, updated) => {
+            this.handleProgress(title, updated);
           });
 
-          this.totalProcessedThisSession += result.processed;
-          this.totalGapFilledThisSession += result.updated;
-
-          // 2-second pace when working on secondary gap upgrades
-          await this.delay(2000);
+          // 1.5-second pace when working on secondary gap upgrades
+          await this.delay(1500);
           continue;
         }
 
         // CASE C: Catalog is 100% saturated -> Idle polling for new Python inserts
-        this.lastScannedTitle = `Idle / Real-Time Watcher Online (${totalMovies} movies saturated)`;
+        this.lastScannedTitle = `Idle / Real-Time Watcher Online (${totalMovies} movies 100% saturated)`;
         await this.delay(5000); // Check every 5 seconds for new arrivals
       } catch (err: any) {
         this.lastError = err.message;
@@ -221,8 +218,9 @@ export class AutoScannerService {
     const totalMovies = totalRes.count || 0;
     const enrichedMovies = enrichedRes.count || 0;
     const gapMoviesCount = gapRes.count || 0;
+    const fullyEnrichedMovies = Math.max(0, totalMovies - gapMoviesCount);
     const unenrichedRemaining = Math.max(0, totalMovies - enrichedMovies);
-    const completionPct = totalMovies > 0 ? Math.round((enrichedMovies / totalMovies) * 1000) / 10 : 0;
+    const completionPct = totalMovies > 0 ? Math.round((fullyEnrichedMovies / totalMovies) * 1000) / 10 : 0;
 
     // Check if AI gap-fill is admin-enabled
     let isAiGapFillEnabled = false;
@@ -236,6 +234,7 @@ export class AutoScannerService {
       isPaused: this.isPaused,
       totalMovies,
       enrichedMovies,
+      fullyEnrichedMovies,
       unenrichedRemaining,
       gapMoviesCount,
       completionPct,

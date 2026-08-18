@@ -246,7 +246,7 @@ export class CategorizerService {
    */
   async syncUncategorizedMovies(
     batchSize: number = 100,
-    onProgressOrOffset?: ((title: string) => void) | number
+    onProgressOrOffset?: ((title: string, wasUpdated?: boolean) => void) | number
   ): Promise<{ processed: number; updated: number; gapsIdentified: number }> {
     const supabase = SupabaseService.getClient();
     const onProgress = typeof onProgressOrOffset === 'function' ? onProgressOrOffset : undefined;
@@ -279,8 +279,9 @@ export class CategorizerService {
     // 3. RUN TIER 1 NON-AI MULTI-ENGINE RESOLVER
     console.log(`[CATEGORIZER] 🔍 Scanning ${movies.length} movies with Tier 1 Multi-Engine...`);
     const results = await this.pMap(movies, 8, async (m) => {
-      if (onProgress) onProgress(`${m.title} (#${m.id})`);
-      return await this.resolveGapsWithNonAiEngines(m, supabase);
+      const updated = await this.resolveGapsWithNonAiEngines(m, supabase);
+      if (onProgress) onProgress(`${m.title} (#${m.id})`, updated);
+      return updated;
     });
 
     nonAiUpdated = results.filter(Boolean).length;
