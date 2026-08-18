@@ -890,7 +890,7 @@ Respond ONLY in valid JSON conforming to this schema:
     // Fetch movies missing title_ar, overview_ar, or studios_json
     const { data: gapMovies, error } = await supabase
       .from('movies')
-      .select('id, title, tmdb_id, year, release_date, overview, genres_json, keywords_json, studios_json, title_ar, overview_ar, tagline_ar')
+      .select('id, title, tmdb_title, tmdb_id, year, release_date, overview, genres_json, keywords_json, studios_json, title_ar, overview_ar, tagline_ar')
       .or('title_ar.is.null,overview_ar.is.null,studios_json.is.null,studios_json.eq.[]')
       .order('popularity', { ascending: false, nullsFirst: false })
       .limit(maxTitles);
@@ -995,7 +995,7 @@ Respond ONLY in valid JSON conforming to this schema:
         const { StreamingSourcesService } = await import('./streaming_sources.service');
         const streamingSources = StreamingSourcesService.getInstance();
         const movieYear = movie.year || (movie.release_date || '').slice(0, 4);
-        const matchedOriginal = streamingSources.matchOriginal(movie.title, movie.tmdb_title, movieYear);
+        const matchedOriginal = streamingSources.matchOriginal(movie.title, (movie as any).tmdb_title, movieYear);
 
         const majorTheatricalStudioIds = [
           127928, 25, 43, 174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559, 4, 24955, 2348, 8302, 333, 2, 6125, 5218, 420, 32353, 11106, 13252
