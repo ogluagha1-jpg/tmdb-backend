@@ -125,13 +125,12 @@ export class GeminiPoolService {
     status: 'healthy' | 'cooldown' | 'exhausted' | 'invalid';
     lastUsedAt: number | null;
   }> = new Map();
-  private groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  private groqModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
   private groqCandidateModels = [
-    process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
-    'llama-3.3-70b-specdec',
-    'deepseek-r1-distill-llama-70b',
-    'llama-3.1-8b-instant',
-    'gemma2-9b-it',
+    process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'allam-2-7b',
+    'qwen/qwen3.6-27b',
   ];
   private groqRoundRobinCursor = 0;
 
@@ -284,15 +283,14 @@ export class GeminiPoolService {
 
       const rawModels: Array<{ id: string }> = res.data?.data || [];
       if (rawModels.length > 0) {
-        // Filter strictly to models known for flawless JSON mode and high speed
-        const validJsonModels = rawModels
+        const chatModels = rawModels
           .map((m) => m.id)
-          .filter((id) => /llama-3\.3-70b|llama-3\.1-8b|llama3-70b|llama3-8b|gemma2-9b/i.test(id) && !/guard|vision/i.test(id));
+          .filter((id) => !/whisper|audio|embed|tts|vision|guard/i.test(id));
 
-        if (validJsonModels.length > 0) {
-          const sorted = validJsonModels.sort((a, b) => {
-            const scoreA = /llama-3\.3-70b/i.test(a) ? 100 : /llama-3\.1-8b/i.test(a) ? 80 : 50;
-            const scoreB = /llama-3\.3-70b/i.test(b) ? 100 : /llama-3\.1-8b/i.test(b) ? 80 : 50;
+        if (chatModels.length > 0) {
+          const sorted = chatModels.sort((a, b) => {
+            const scoreA = /120b/i.test(a) ? 100 : /20b|27b|70b/i.test(a) ? 80 : /allam/i.test(a) ? 75 : 50;
+            const scoreB = /120b/i.test(b) ? 100 : /20b|27b|70b/i.test(b) ? 80 : /allam/i.test(b) ? 75 : 50;
             return scoreB - scoreA;
           });
           this.groqCandidateModels = Array.from(new Set([...sorted, ...this.groqCandidateModels]));
@@ -404,23 +402,28 @@ export class GeminiPoolService {
       const t0 = Date.now();
       for (const m of this.groqCandidateModels) {
         try {
+          const payload: any = {
+            model: m,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are the lead cinema categorization and localization engine for a premium streaming platform (Teraflix). Always output pure valid JSON strictly matching the requested schema. Provide complete title_ar, overview_ar, tagline_ar, primary_studio, studio_id, and thematic_keywords. Output ONLY JSON.',
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            temperature: 0.2,
+          };
+
+          if (!/allam|qwen/i.test(m)) {
+            payload.response_format = { type: 'json_object' };
+          }
+
           const res = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
-            {
-              model: m,
-              messages: [
-                {
-                  role: 'system',
-                  content: 'You are the lead cinema categorization and localization engine for a premium streaming platform (Teraflix). Always output pure valid JSON strictly matching the requested schema. Never output markdown fences or commentary.',
-                },
-                {
-                  role: 'user',
-                  content: prompt,
-                },
-              ],
-              response_format: { type: 'json_object' },
-              temperature: 0.2,
-            },
+            payload,
             {
               headers: {
                 Authorization: `Bearer ${selectedKey}`,
@@ -433,7 +436,16 @@ export class GeminiPoolService {
           const content = res.data?.choices?.[0]?.message?.content;
           if (!content) throw new Error('Empty Groq response content');
 
-          const parsed = JSON.parse(content.trim()) as T;
+          let raw = content.trim();
+          const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (fenceMatch) raw = fenceMatch[1].trim();
+          const firstBrace = raw.indexOf('{');
+          const lastBrace = raw.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            raw = raw.substring(firstBrace, lastBrace + 1);
+          }
+
+          const parsed = JSON.parse(raw) as T;
           if (typeof parsed === 'object' && parsed !== null) {
             (parsed as any).ai_model = `groq/${m}`;
           }
