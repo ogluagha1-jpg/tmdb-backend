@@ -124,6 +124,7 @@ export class GeminiPoolService {
     cooldownUntil: number | null;
     status: 'healthy' | 'cooldown' | 'exhausted' | 'invalid';
     lastUsedAt: number | null;
+  }> = new Map();
   private groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
   private groqCandidateModels = [
     process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
