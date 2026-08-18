@@ -21,17 +21,13 @@ export interface AutoScannerStatus {
 }
 
 /**
- * AutoScannerService — Cooperative Multi-Engine Background Processor
+ * AutoScannerService — Real-Time Cooperative Multi-Engine Background Scanner
  *
- * Tier 1 (Always Active):
- *   - Wikipedia Arabic Interlanguage API
- *   - Cinemeta Stremio CDN (descriptions, runtimes, directors, cast)
- *   - OMDb / IMDb API (awards, ratings, age classification)
- *   - TMDB Arabic & Taglines (ar-SA overview, Arabic tagline, original English tagline)
- *   - Streaming Sources Knowledge Graph (Netflix, Apple TV+, Disney+, HBO, Amazon Prime, Paramount+)
- *
- * Tier 2 (Opt-in by Admin via POST /api/ai/toggle):
- *   - Gemini & Groq AI Pool
+ * Real-time features:
+ * 1. Watches for new database entries every 5 seconds (0 wait time on new Python inserts)
+ * 2. Processes backlog in continuous rapid ticks (500ms between batches)
+ * 3. Updates `lastScannedTitle` in real-time for live UI dashboard reflection
+ * 4. Advances database queue automatically (stamps `enriched_at` on every title)
  */
 export class AutoScannerService {
   private static instance: AutoScannerService;
@@ -42,7 +38,7 @@ export class AutoScannerService {
   private isPaused = false;
   private totalProcessedThisSession = 0;
   private totalGapFilledThisSession = 0;
-  private lastScannedTitle = '';
+  private lastScannedTitle = 'Initializing multi-engine watcher...';
   private lastError: string | null = null;
   private startedAt: string | null = null;
   private lastActiveAt: string | null = null;
@@ -60,7 +56,7 @@ export class AutoScannerService {
     return AutoScannerService.instance;
   }
 
-  /// Start or resume cooperative background scanner
+  /// Start or resume real-time cooperative scanner
   public start(): void {
     if (this.isRunning && !this.isPaused) return;
 
@@ -68,23 +64,26 @@ export class AutoScannerService {
     this.isPaused = false;
     if (!this.startedAt) this.startedAt = new Date().toISOString();
     this.lastActiveAt = new Date().toISOString();
+    this.lastScannedTitle = 'Real-time multi-engine scanner active';
 
-    console.log('[AUTO-SCANNER] 🚀 Cooperative multi-engine background scanner started.');
+    console.log('[AUTO-SCANNER] 🚀 Real-time cooperative multi-engine scanner online.');
     this.runContinuousLoop().catch((err) => {
       console.error('[AUTO-SCANNER] Fatal loop error:', err.message);
       this.isRunning = false;
     });
   }
 
-  /// Pause scanning
+  /// Pause scanner
   public pause(): void {
     this.isPaused = true;
+    this.lastScannedTitle = 'Paused by admin';
     console.log('[AUTO-SCANNER] ⏸️ Scanner paused by admin.');
   }
 
-  /// Full rescan: multi-engine gap resolution (Tier 1 non-AI + Tier 2 AI if enabled) + category regeneration
+  /// Reset all timestamps and run full catalog multi-engine rescan
   public async resetAndRescanAll(): Promise<{ resetCount: number }> {
-    console.log('[AUTO-SCANNER] 🔄 Initiating full cooperative rescan across all engines...');
+    console.log('[AUTO-SCANNER] 🔄 Initiating full catalog multi-engine rescan...');
+    const supabase = SupabaseService.getClient();
 
     this.totalProcessedThisSession = 0;
     this.totalGapFilledThisSession = 0;
@@ -93,28 +92,44 @@ export class AutoScannerService {
     this.startedAt = new Date().toISOString();
     this.lastActiveAt = new Date().toISOString();
     this.isPaused = false;
+    this.isRunning = true;
+    this.lastScannedTitle = 'Resetting catalogue timestamps...';
 
-    // Run multi-source sync (streaming originals + Wikipedia + Cinemeta + OMDB + TMDB Arabic)
-    const result = await this.categorizer.syncUncategorizedMovies(5000);
+    // Clear enriched_at to allow full fresh pass across all engines
+    await supabase
+      .from('movies')
+      .update({ enriched_at: null })
+      .not('id', 'is', null);
 
-    this.totalProcessedThisSession = result.processed;
-    this.totalGapFilledThisSession = result.updated;
-
-    // Start continuous watcher loop
+    console.log('[AUTO-SCANNER] ✅ Catalogue timestamps reset. Starting active loop...');
     this.start();
 
-    return { resetCount: result.processed };
+    // Trigger immediate first batch
+    const res = await this.categorizer.syncUncategorizedMovies(100, (title) => {
+      this.lastScannedTitle = title;
+      this.lastActiveAt = new Date().toISOString();
+    });
+
+    this.totalProcessedThisSession += res.processed;
+    this.totalGapFilledThisSession += res.updated;
+
+    return { resetCount: res.processed };
   }
 
   /// Trigger a single discrete batch scan / audit
   public async scanBatch(batchSize: number = 200): Promise<{ processed: number; updated: number }> {
     this.lastActiveAt = new Date().toISOString();
+    this.lastScannedTitle = `Processing batch (${batchSize} titles)...`;
     console.log(`[AUTO-SCANNER] 📋 Running cooperative batch scan (limit: ${batchSize})...`);
 
-    const result = await this.categorizer.syncUncategorizedMovies(batchSize);
+    const result = await this.categorizer.syncUncategorizedMovies(batchSize, (title) => {
+      this.lastScannedTitle = title;
+      this.lastActiveAt = new Date().toISOString();
+    });
 
     this.totalProcessedThisSession += result.processed;
     this.totalGapFilledThisSession += result.updated;
+    this.lastScannedTitle = `Batch complete: ${result.updated}/${result.processed} updated`;
 
     return {
       processed: result.processed,
@@ -122,52 +137,73 @@ export class AutoScannerService {
     };
   }
 
-  /// Continuous cooperative loop
+  /// Real-time continuous cooperative processing loop
   private async runContinuousLoop(): Promise<void> {
-    let lastEnrichedCount = -1;
-    let loopCycle = 0;
-
     while (this.isRunning) {
       if (this.isPaused) {
-        await this.delay(3000);
+        await this.delay(2000);
         continue;
       }
 
       try {
         const supabase = SupabaseService.getClient();
 
-        // Check current database saturation
-        const [enrichedRes, gapRes] = await Promise.all([
-          supabase.from('movies').select('id', { count: 'exact', head: true }).not('enriched_at', 'is', null),
+        // 1. Check real-time database state
+        const [totalRes, unenrichedRes, gapRes] = await Promise.all([
+          supabase.from('movies').select('id', { count: 'exact', head: true }),
+          supabase.from('movies').select('id', { count: 'exact', head: true }).is('enriched_at', null),
           supabase.from('movies').select('id', { count: 'exact', head: true }).or('title_ar.is.null,overview_ar.is.null,tagline.is.null,tagline_ar.is.null,studios_json.is.null,studios_json.eq.[]'),
         ]);
 
-        const currentEnriched = enrichedRes.count || 0;
-        const currentGaps = gapRes.count || 0;
+        const totalMovies = totalRes.count || 0;
+        const unenrichedCount = unenrichedRes.count || 0;
+        const gapCount = gapRes.count || 0;
         this.lastActiveAt = new Date().toISOString();
 
-        // If new movies were enriched by the Python engine, run cooperative pipeline!
-        if (lastEnrichedCount !== -1 && currentEnriched !== lastEnrichedCount) {
-          const diff = currentEnriched - lastEnrichedCount;
-          console.log(`[AUTO-SCANNER] 📡 Database update detected (+${diff} movies). Running multi-engine gap resolution...`);
-          await this.categorizer.syncUncategorizedMovies(Math.min(diff * 2, 500)).catch(() => {});
+        // CASE A: Newly inserted / unenriched records exist -> PROCESS IMMEDIATELY
+        if (unenrichedCount > 0) {
+          const batchSize = Math.min(unenrichedCount, 50);
+          console.log(`[AUTO-SCANNER] ⚡ Real-time backlog: ${unenrichedCount} unenriched movies found. Processing batch of ${batchSize}...`);
+
+          const result = await this.categorizer.syncUncategorizedMovies(batchSize, (title) => {
+            this.lastScannedTitle = title;
+            this.lastActiveAt = new Date().toISOString();
+          });
+
+          this.totalProcessedThisSession += result.processed;
+          this.totalGapFilledThisSession += result.updated;
+
+          // Short breather between active batches (500ms) to allow rapid processing
+          await this.delay(500);
+          continue;
         }
 
-        // Every 10th cycle (~10 minutes), do a periodic gap check across existing library
-        if (loopCycle > 0 && loopCycle % 10 === 0 && currentGaps > 0) {
-          console.log(`[AUTO-SCANNER] 🔍 Periodic gap check: ${currentGaps} movies have missing fields. Running Tier 1 Multi-Engine...`);
-          await this.categorizer.syncUncategorizedMovies(Math.min(currentGaps, 200)).catch(() => {});
+        // CASE B: Existing movies have missing fields -> Steadily upgrade catalog
+        if (gapCount > 0) {
+          const batchSize = Math.min(gapCount, 25);
+          console.log(`[AUTO-SCANNER] 🔍 Gap resolution: ${gapCount} titles with missing fields. Processing batch of ${batchSize}...`);
+
+          const result = await this.categorizer.syncUncategorizedMovies(batchSize, (title) => {
+            this.lastScannedTitle = title;
+            this.lastActiveAt = new Date().toISOString();
+          });
+
+          this.totalProcessedThisSession += result.processed;
+          this.totalGapFilledThisSession += result.updated;
+
+          // 2-second pace when working on secondary gap upgrades
+          await this.delay(2000);
+          continue;
         }
 
-        lastEnrichedCount = currentEnriched;
-        loopCycle++;
-
-        // Polite polling interval (every 60 seconds)
-        await this.delay(60000);
+        // CASE C: Catalog is 100% saturated -> Idle polling for new Python inserts
+        this.lastScannedTitle = `Idle / Real-Time Watcher Online (${totalMovies} movies saturated)`;
+        await this.delay(5000); // Check every 5 seconds for new arrivals
       } catch (err: any) {
         this.lastError = err.message;
-        console.error('[AUTO-SCANNER] Watcher cycle error:', err.message);
-        await this.delay(10000);
+        this.lastScannedTitle = `Error: ${err.message}`;
+        console.error('[AUTO-SCANNER] Real-time loop notice:', err.message);
+        await this.delay(5000);
       }
     }
   }

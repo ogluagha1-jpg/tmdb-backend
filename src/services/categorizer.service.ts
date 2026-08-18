@@ -8,16 +8,16 @@ import { CategoryGeneratorService } from './category_generator.service';
 /**
  * CategorizerService — Cooperative Multi-Engine Metadata & Taxonomist Service
  *
- * Architecture:
- * 1. TIER 1 (Deterministic Non-AI Multi-Engine — ALWAYS ACTIVE):
- *    - TMDB Arabic Endpoint & Credits (ar-SA overview, Arabic tagline, Arabic cast)
- *    - Wikipedia Arabic Interlanguage API (resolves missing Arabic titles)
- *    - Cinemeta CDN Mirrors (Stremio metadata, runtime, description, trailer, director)
- *    - OMDb / IMDb API (Rotten Tomatoes scores, awards, IMDb ratings, age ratings)
- *    - Streaming Sources Knowledge Graph (Netflix, Apple TV+, Disney+, HBO, Amazon Prime, Paramount+)
+ * Tier 1 (Always Active Non-AI Multi-Engine):
+ *   - Wikipedia Arabic Interlanguage API
+ *   - TMDB Arabic & Credits (ar-SA overview, Arabic tagline, Arabic cast)
+ *   - TMDB Details Fallback (English tagline, director, cast, trailer, keywords)
+ *   - Cinemeta Stremio CDN (runtime, description, director, ratings)
+ *   - OMDb / IMDb API (awards, ratings, age classification)
+ *   - Streaming Sources Knowledge Graph (Netflix, Apple TV+, Disney+, HBO, Amazon Prime, Paramount+)
  *
- * 2. TIER 2 (AI Booster — OPT-IN / ADMIN TOGGLED ONLY):
- *    - Gemini / Groq Pool fills remaining untranslated or unclassified gaps
+ * Tier 2 (Opt-in by Admin via POST /api/ai/toggle):
+ *   - Gemini / Groq Pool for remaining untranslated gaps
  */
 export class CategorizerService {
   private tmdb: TmdbService;
@@ -187,7 +187,6 @@ export class CategorizerService {
           }
 
           if (omdbData) {
-            // Fill awards / rotten tomatoes score if columns exist
             if (omdbData.awards && !movie.awards) {
               updates.awards = omdbData.awards;
               modified = true;
@@ -214,22 +213,22 @@ export class CategorizerService {
         }
       }
 
-      if (modified && Object.keys(updates).length > 0) {
-        updates.enriched_at = new Date().toISOString();
-        const { error: updErr } = await supabase
-          .from('movies')
-          .update(updates)
-          .eq('id', movie.id);
+      // ALWAYS STAMP enriched_at so the queue advances and never gets stuck
+      updates.enriched_at = new Date().toISOString();
 
-        if (!updErr) return true;
-        
-        // Safe retry without unknown columns (e.g. awards)
-        if (updErr && /awards|cast_json_ar/i.test(updErr.message)) {
-          delete updates.awards;
-          delete updates.cast_json_ar;
-          const retryRes = await supabase.from('movies').update(updates).eq('id', movie.id);
-          return !retryRes.error;
-        }
+      const { error: updErr } = await supabase
+        .from('movies')
+        .update(updates)
+        .eq('id', movie.id);
+
+      if (!updErr) return modified;
+
+      // Safe retry if column does not exist
+      if (updErr && /awards|cast_json_ar/i.test(updErr.message)) {
+        delete updates.awards;
+        delete updates.cast_json_ar;
+        const retryRes = await supabase.from('movies').update(updates).eq('id', movie.id);
+        return !retryRes.error && modified;
       }
 
       return false;
@@ -239,43 +238,55 @@ export class CategorizerService {
   }
 
   /**
-   * Cooperative Multi-Engine Sync:
-   * 1. Multi-Source Streaming Originals Sync
-   * 2. Non-AI Multi-Engine Gap Filling (TMDB Arabic + Wikipedia + Cinemeta + OMDB + Tagline resolution)
-   * 3. AI Booster (Gemini / Groq) ONLY if enabled by admin
-   * 4. Dynamic Category Generation & Publishing
+   * Cooperative Multi-Engine Batch Sync:
+   * 1. Fetches oldest/unenriched records (prioritizes NULL enriched_at)
+   * 2. Runs Tier 1 Multi-Engine Gap Filling (Wikipedia, Cinemeta, OMDB, TMDB Arabic & Taglines)
+   * 3. Runs Tier 2 AI Booster if enabled by admin
+   * 4. Regenerates dynamic home categories
    */
   async syncUncategorizedMovies(
     batchSize: number = 100,
-    _offset: number = 0
+    onProgressOrOffset?: ((title: string) => void) | number
   ): Promise<{ processed: number; updated: number; gapsIdentified: number }> {
     const supabase = SupabaseService.getClient();
-
-    console.log('[CATEGORIZER] 🌐 Running cooperative multi-engine metadata audit...');
+    const onProgress = typeof onProgressOrOffset === 'function' ? onProgressOrOffset : undefined;
+    const offset = typeof onProgressOrOffset === 'number' ? onProgressOrOffset : 0;
 
     // 1. Tag streaming originals across database
-    const originalsResult = await this.syncMultiSourceStreamingOriginals(batchSize);
+    const originalsResult = await this.syncMultiSourceStreamingOriginals(Math.min(batchSize, 200));
 
-    // 2. Identify gap titles (missing tagline, Arabic, studios, keywords, director)
-    const { data: gapMovies, count: totalGaps } = await supabase
+    // 2. Fetch movies ordered by oldest enriched_at first (so new arrivals are #1 priority)
+    let query = supabase
       .from('movies')
-      .select('id, title, tmdb_title, tmdb_id, imdb_id, year, release_date, tagline, tagline_ar, title_ar, overview_ar, director, cast_json, cast_json_ar, keywords_json, studios_json, trailer_url', { count: 'exact' })
-      .or('title_ar.is.null,overview_ar.is.null,tagline.is.null,tagline_ar.is.null,studios_json.is.null,studios_json.eq.[]')
-      .order('popularity', { ascending: false, nullsFirst: false })
-      .limit(batchSize);
+      .select('id, title, tmdb_title, tmdb_id, imdb_id, year, release_date, tagline, tagline_ar, title_ar, overview_ar, director, cast_json, cast_json_ar, keywords_json, studios_json, trailer_url, enriched_at', { count: 'exact' })
+      .order('enriched_at', { ascending: true, nullsFirst: true });
 
-    const gapsCount = totalGaps || gapMovies?.length || 0;
-    let nonAiUpdated = 0;
-
-    // 3. RUN TIER 1 NON-AI MULTI-ENGINE RESOLVER (Always active, free, deterministic)
-    if (gapMovies && gapMovies.length > 0) {
-      console.log(`[CATEGORIZER] 🔍 Running Tier 1 Multi-Engine (Wikipedia, Cinemeta, OMDB, TMDB Arabic) on ${gapMovies.length} gap titles...`);
-      const results = await this.pMap(gapMovies, 8, (m) => this.resolveGapsWithNonAiEngines(m, supabase));
-      nonAiUpdated = results.filter(Boolean).length;
-      console.log(`[CATEGORIZER] ✅ Tier 1 Non-AI resolution complete: ${nonAiUpdated}/${gapMovies.length} titles enriched.`);
+    if (offset > 0) {
+      query = query.range(offset, offset + batchSize - 1);
+    } else {
+      query = query.limit(batchSize);
     }
 
-    // 4. RUN TIER 2 AI BOOSTER (Gemini / Groq) — ONLY if explicitly enabled by admin
+    const { data: movies, count: totalGaps } = await query;
+
+    if (!movies || movies.length === 0) {
+      return { processed: 0, updated: 0, gapsIdentified: 0 };
+    }
+
+    const gapsCount = totalGaps || movies.length;
+    let nonAiUpdated = 0;
+
+    // 3. RUN TIER 1 NON-AI MULTI-ENGINE RESOLVER
+    console.log(`[CATEGORIZER] 🔍 Scanning ${movies.length} movies with Tier 1 Multi-Engine...`);
+    const results = await this.pMap(movies, 8, async (m) => {
+      if (onProgress) onProgress(`${m.title} (#${m.id})`);
+      return await this.resolveGapsWithNonAiEngines(m, supabase);
+    });
+
+    nonAiUpdated = results.filter(Boolean).length;
+    console.log(`[CATEGORIZER] ✅ Tier 1 Multi-Engine enriched: ${nonAiUpdated}/${movies.length} titles.`);
+
+    // 4. RUN TIER 2 AI BOOSTER (ONLY if explicitly enabled by admin)
     let aiUpdated = 0;
     try {
       const { GeminiPoolService } = await import('./gemini_pool.service');
@@ -287,11 +298,9 @@ export class CategorizerService {
         console.log(`[CATEGORIZER] 🧠 Admin AI Boost is ENABLED. Launching AI gap-fill for remaining gaps...`);
         await pool.startCooperativeGapScan({ maxTitles: Math.min(gapsCount, batchSize) });
         aiUpdated = pool.getPoolMetrics().cooperativeScan.enriched;
-      } else if (!pool.isAiEnabled()) {
-        console.log(`[CATEGORIZER] 🔒 AI Gap-Fill is DISABLED by admin. Non-AI Tier 1 handled ${nonAiUpdated} titles successfully.`);
       }
     } catch (err: any) {
-      console.warn('[CATEGORIZER] AI boost check notice:', err.message);
+      console.warn('[CATEGORIZER] AI boost notice:', err.message);
     }
 
     // 5. Regenerate dynamic home categories
@@ -300,7 +309,7 @@ export class CategorizerService {
     });
 
     return {
-      processed: originalsResult.processed + (gapMovies?.length || 0),
+      processed: movies.length,
       updated: originalsResult.tagged + nonAiUpdated + aiUpdated,
       gapsIdentified: gapsCount,
     };
@@ -315,8 +324,6 @@ export class CategorizerService {
     let offset = 0;
     let totalTagged = 0;
     let totalProcessed = 0;
-
-    console.log('[CATEGORIZER] 📡 Starting Multi-Source Streaming Originals Sync...');
 
     while (true) {
       const { data: movies, error } = await supabase
@@ -363,7 +370,6 @@ export class CategorizerService {
       if (movies.length < batchSize) break;
     }
 
-    console.log(`[CATEGORIZER] ✅ Multi-Source sync finished! Processed: ${totalProcessed}, Tagged: ${totalTagged} originals.`);
     return { processed: totalProcessed, tagged: totalTagged };
   }
 }
