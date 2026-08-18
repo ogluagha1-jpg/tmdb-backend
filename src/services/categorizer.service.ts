@@ -236,7 +236,9 @@ export class CategorizerService {
 
       // Multi-Source Streaming Originals Knowledge Graph & Deterministic Studio Attribution
       const majorTheatricalStudioIds = [
-        127928, 25, 43, 174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559, 4, 24955, 2348, 8302, 333, 2, 6125, 5218, 420, 32353, 11106, 13252
+        174, 429, 9993, 128064, 12, 33, 10146, 5, 34, 2251, 559, 4, 24955, 2348,
+        420, 11106, 13252, 7505, 2, 6125, 127928, 25, 43, 9383, 1632, 35, 85885,
+        20580, 21, 194232, 3172, 923, 41077, 3, 10342
       ];
       const hasMajorTheatricalStudio = studiosJson.some((s: any) => majorTheatricalStudioIds.includes(s.id));
 

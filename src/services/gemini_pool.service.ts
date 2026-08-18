@@ -648,9 +648,9 @@ Analyze the following movie and provide authentic Arabic cultural localization a
    - Sony Pictures / Columbia: 5
    - Apple Studios / Apple TV+: 194232
    - Amazon MGM Studios: 20580
-   - A24: 420
+   - A24: 41077
    - Neon: 90060
-   - Studio Ghibli: 10338
+   - Studio Ghibli: 10342
    - Lionsgate: 1632
    - 20th Century Studios: 127928
    - Searchlight Pictures: 43
@@ -998,7 +998,9 @@ Respond ONLY in valid JSON conforming to this schema:
         const matchedOriginal = streamingSources.matchOriginal(movie.title, (movie as any).tmdb_title, movieYear);
 
         const majorTheatricalStudioIds = [
-          127928, 25, 43, 174, 429, 9993, 12, 128064, 33, 67, 33413, 10338, 5, 34, 84, 2251, 559, 4, 24955, 2348, 8302, 333, 2, 6125, 5218, 420, 32353, 11106, 13252
+          174, 429, 9993, 128064, 12, 33, 10146, 5, 34, 2251, 559, 4, 24955, 2348,
+          420, 11106, 13252, 7505, 2, 6125, 127928, 25, 43, 9383, 1632, 35, 85885,
+          20580, 21, 194232, 3172, 923, 41077, 3, 10342
         ];
         const hasMajorTheatricalStudio = studios.some((s: any) => majorTheatricalStudioIds.includes(s.id));
 
