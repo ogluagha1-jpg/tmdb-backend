@@ -272,11 +272,6 @@ export class GeminiPoolService {
     }
   }
 
-  /// Programmatically queries Groq /v1/models to discover active models on this key
-  private async discoverGroqModels(): Promise<void> {
-    if (this.groqKeyPool.length === 0) return;
-    const testKey = this.groqKeyPool[0];
-    try {
   /// Programmatically queries Groq /v1/models to verify active models on this key
   private async discoverGroqModels(): Promise<void> {
     if (this.groqKeyPool.length === 0) return;
