@@ -217,6 +217,16 @@ export class StreamingSourcesService {
       if (this.amazonMap.has(k)) return this.amazonMap.get(k)!;
     }
 
+    // 4. Fallback: Check title-only for distinct multi-word titles if year was slightly mismatched
+    if (!isShortTitle) {
+      if (c1 && this.netflixMap.has(c1)) return this.netflixMap.get(c1)!;
+      if (c2 && this.netflixMap.has(c2)) return this.netflixMap.get(c2)!;
+      if (c1 && this.appleMap.has(c1)) return this.appleMap.get(c1)!;
+      if (c2 && this.appleMap.has(c2)) return this.appleMap.get(c2)!;
+      if (c1 && this.amazonMap.has(c1)) return this.amazonMap.get(c1)!;
+      if (c2 && this.amazonMap.has(c2)) return this.amazonMap.get(c2)!;
+    }
+
     return null;
   }
 }
