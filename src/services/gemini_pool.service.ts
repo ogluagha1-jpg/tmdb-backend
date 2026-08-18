@@ -277,6 +277,11 @@ export class GeminiPoolService {
     if (this.groqKeyPool.length === 0) return;
     const testKey = this.groqKeyPool[0];
     try {
+  /// Programmatically queries Groq /v1/models to verify active models on this key
+  private async discoverGroqModels(): Promise<void> {
+    if (this.groqKeyPool.length === 0) return;
+    const testKey = this.groqKeyPool[0];
+    try {
       const res = await axios.get('https://api.groq.com/openai/v1/models', {
         headers: { Authorization: `Bearer ${testKey}` },
         timeout: 8000,
@@ -284,24 +289,24 @@ export class GeminiPoolService {
 
       const rawModels: Array<{ id: string }> = res.data?.data || [];
       if (rawModels.length > 0) {
-        const chatModels = rawModels
+        // Filter strictly to models known for flawless JSON mode and high speed
+        const validJsonModels = rawModels
           .map((m) => m.id)
-          .filter((id) => !/whisper|audio|embed|tts|vision|guard/i.test(id));
+          .filter((id) => /llama-3\.3-70b|llama-3\.1-8b|llama3-70b|llama3-8b|gemma2-9b/i.test(id) && !/guard|vision/i.test(id));
 
-        if (chatModels.length > 0) {
-          const sorted = chatModels.sort((a, b) => {
-            const scoreA = /120b|70b/i.test(a) ? 100 : /27b|32b|20b/i.test(a) ? 80 : /8b/i.test(a) ? 60 : 50;
-            const scoreB = /120b|70b/i.test(b) ? 100 : /27b|32b|20b/i.test(b) ? 80 : /8b/i.test(b) ? 60 : 50;
+        if (validJsonModels.length > 0) {
+          const sorted = validJsonModels.sort((a, b) => {
+            const scoreA = /llama-3\.3-70b/i.test(a) ? 100 : /llama-3\.1-8b/i.test(a) ? 80 : 50;
+            const scoreB = /llama-3\.3-70b/i.test(b) ? 100 : /llama-3\.1-8b/i.test(b) ? 80 : 50;
             return scoreB - scoreA;
           });
-
           this.groqCandidateModels = Array.from(new Set([...sorted, ...this.groqCandidateModels]));
           this.groqModel = this.groqCandidateModels[0];
-          console.log(`[GROQ_POOL] ✅ Live Groq Models Discovered: [${this.groqCandidateModels.slice(0, 4).join(', ')}]`);
+          console.log(`[GROQ_POOL] ✅ Live Groq Models Discovered: [${this.groqCandidateModels.join(', ')}]`);
         }
       }
     } catch (err: any) {
-      console.warn(`[GROQ_POOL] ⚠️ Model discovery notice: ${err.message}. Using default production cascade.`);
+      console.warn(`[GROQ_POOL] ⚠️ Model discovery notice: ${err.message}. Using default production models.`);
     }
   }
 
@@ -356,100 +361,111 @@ export class GeminiPoolService {
     return null;
   }
 
-  /// Calls Groq Open-Source API with Meta Llama 3.3 70B & native JSON mode
-  public async callGroqOpenSource<T>(prompt: string): Promise<T | null> {
+  /// Calls Groq Open-Source API with Meta Llama 3.3 70B & native JSON mode with polite backoff
+  public async callGroqOpenSource<T>(prompt: string, maxAttempts = 3): Promise<T | null> {
     if (this.groqKeyPool.length === 0) return null;
 
-    const now = Date.now();
-    const len = this.groqKeyPool.length;
-    let selectedKey: string | null = null;
-    let selectedIdx = -1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const now = Date.now();
+      const len = this.groqKeyPool.length;
+      let selectedKey: string | null = null;
+      let selectedIdx = -1;
 
-    for (let offset = 0; offset < len; offset++) {
-      const idx = (this.groqRoundRobinCursor + offset) % len;
-      const k = this.groqKeyPool[idx];
-      const stat = this.groqStats.get(k)!;
+      for (let offset = 0; offset < len; offset++) {
+        const idx = (this.groqRoundRobinCursor + offset) % len;
+        const k = this.groqKeyPool[idx];
+        const stat = this.groqStats.get(k)!;
 
-      stat.rpmTimestamps = stat.rpmTimestamps.filter((t) => now - t < 60000);
-      if (stat.cooldownUntil && now >= stat.cooldownUntil) {
-        stat.cooldownUntil = null;
-        stat.status = 'healthy';
-      }
-
-      if (stat.status === 'invalid') continue;
-      if (stat.cooldownUntil && now < stat.cooldownUntil) continue;
-      if (stat.rpmTimestamps.length < 28) {
-        selectedKey = k;
-        selectedIdx = idx;
-        break;
-      }
-    }
-
-    if (!selectedKey || selectedIdx === -1) {
-      console.warn('[GROQ_POOL] ⚠️ All Groq keys in cooldown or saturated.');
-      return null;
-    }
-
-    this.groqRoundRobinCursor = (selectedIdx + 1) % len;
-    const stat = this.groqStats.get(selectedKey)!;
-    stat.rpmTimestamps.push(now);
-    stat.lastUsedAt = now;
-
-    const t0 = Date.now();
-    for (const m of this.groqCandidateModels) {
-      try {
-        const res = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: m,
-            messages: [
-              {
-                role: 'system',
-                content: 'You are the lead cinema categorization and localization engine for a premium streaming platform (Teraflix). Always output pure valid JSON strictly matching the requested schema.',
-              },
-              {
-                role: 'user',
-                content: prompt,
-              },
-            ],
-            response_format: { type: 'json_object' },
-            temperature: 0.2,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${selectedKey}`,
-              'Content-Type': 'application/json',
-            },
-            timeout: 20000,
-          }
-        );
-
-        const content = res.data?.choices?.[0]?.message?.content;
-        if (!content) throw new Error('Empty Groq response content');
-
-        const parsed = JSON.parse(content.trim()) as T;
-        if (typeof parsed === 'object' && parsed !== null) {
-          (parsed as any).ai_model = `groq/${m}`;
+        stat.rpmTimestamps = stat.rpmTimestamps.filter((t) => now - t < 60000);
+        if (stat.cooldownUntil && now >= stat.cooldownUntil) {
+          stat.cooldownUntil = null;
+          stat.status = 'healthy';
         }
-        stat.totalSuccess++;
-        this.totalAiSuccess++;
-        console.log(`[GROQ_FALLBACK] 🚀 ${m} successfully completed AI enrichment in ${Date.now() - t0}ms!`);
-        return parsed;
-      } catch (err: any) {
-        stat.totalErrors++;
-        const status = err.response?.status;
-        const msg = err.response?.data?.error?.message || err.message;
 
-        if (status === 429) {
-          console.warn(`[GROQ_POOL] 🟡 Groq Key #${selectedIdx + 1} hit 429 quota. Cooling 60s...`);
-          stat.status = 'cooldown';
-          stat.cooldownUntil = Date.now() + 60000;
-        } else if (status === 401 || status === 403) {
-          console.error(`[GROQ_POOL] 🔴 Groq Key #${selectedIdx + 1} invalid/unauthorized: ${msg}`);
-          stat.status = 'invalid';
+        if (stat.status === 'invalid') continue;
+        if (stat.cooldownUntil && now < stat.cooldownUntil) continue;
+        if (stat.rpmTimestamps.length < 28) {
+          selectedKey = k;
+          selectedIdx = idx;
           break;
-        } else {
-          console.warn(`[GROQ_POOL] ⚠️ Groq model ${m} error: ${msg}. Trying next candidate...`);
+        }
+      }
+
+      // If all keys are at capacity, wait 1.5s and retry rather than failing immediately
+      if (!selectedKey || selectedIdx === -1) {
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        console.warn('[GROQ_POOL] ⚠️ All Groq keys momentarily saturated. Pausing...');
+        return null;
+      }
+
+      this.groqRoundRobinCursor = (selectedIdx + 1) % len;
+      const stat = this.groqStats.get(selectedKey)!;
+      stat.rpmTimestamps.push(now);
+      stat.lastUsedAt = now;
+
+      const t0 = Date.now();
+      for (const m of this.groqCandidateModels) {
+        try {
+          const res = await axios.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            {
+              model: m,
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are the lead cinema categorization and localization engine for a premium streaming platform (Teraflix). Always output pure valid JSON strictly matching the requested schema. Never output markdown fences or commentary.',
+                },
+                {
+                  role: 'user',
+                  content: prompt,
+                },
+              ],
+              response_format: { type: 'json_object' },
+              temperature: 0.2,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${selectedKey}`,
+                'Content-Type': 'application/json',
+              },
+              timeout: 18000,
+            }
+          );
+
+          const content = res.data?.choices?.[0]?.message?.content;
+          if (!content) throw new Error('Empty Groq response content');
+
+          const parsed = JSON.parse(content.trim()) as T;
+          if (typeof parsed === 'object' && parsed !== null) {
+            (parsed as any).ai_model = `groq/${m}`;
+          }
+          stat.totalSuccess++;
+          this.totalAiSuccess++;
+          console.log(`[GROQ_AI] 🚀 ${m} successfully enriched in ${Date.now() - t0}ms!`);
+          return parsed;
+        } catch (err: any) {
+          stat.totalErrors++;
+          const status = err.response?.status;
+          const msg = err.response?.data?.error?.message || err.message;
+
+          if (status === 429) {
+            const retryAfterHeader = parseInt(err.response?.headers?.['retry-after'] || '2', 10);
+            const waitMs = Math.min(Math.max(retryAfterHeader * 1000, 1500), 8000);
+            console.warn(`[GROQ_POOL] 🟡 Groq Key #${selectedIdx + 1} hit 429 quota. Cooling ${waitMs}ms and rotating...`);
+            stat.status = 'cooldown';
+            stat.cooldownUntil = Date.now() + waitMs;
+            await new Promise((r) => setTimeout(r, waitMs));
+            break; // Try next attempt with rotated key
+          } else if (status === 401 || status === 403) {
+            console.error(`[GROQ_POOL] 🔴 Groq Key #${selectedIdx + 1} invalid/unauthorized: ${msg}`);
+            stat.status = 'invalid';
+            break;
+          } else {
+            console.warn(`[GROQ_POOL] ⚠️ Groq model ${m} notice: ${msg}. Trying next candidate...`);
+          }
         }
       }
     }

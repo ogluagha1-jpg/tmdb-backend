@@ -156,18 +156,18 @@ export class AutoScannerService {
           continue;
         }
 
-        // Process batch with concurrency = 6
-        const concurrency = 6;
+        // Process batch with polite concurrency = 4 for optimal Groq RPM distribution
+        const concurrency = 4;
         for (let i = 0; i < movies.length; i += concurrency) {
           if (this.isPaused || !this.isRunning) break;
 
           const slice = movies.slice(i, i + concurrency);
           await Promise.all(
-            slice.map(async (m) => {
+            slice.map(async (m: any) => {
               this.lastScannedTitle = m.title;
               this.lastActiveAt = new Date().toISOString();
               const timeoutPromise = new Promise<boolean>((resolve) =>
-                setTimeout(() => resolve(false), 8000)
+                setTimeout(() => resolve(false), 25000)
               );
               try {
                 await Promise.race([
@@ -181,7 +181,7 @@ export class AutoScannerService {
             })
           );
 
-          await this.delay(200); // Polite pacing
+          await this.delay(350); // Polite pacing between micro-batches
         }
 
         this.currentBatchOffset += movies.length;
