@@ -277,11 +277,16 @@ export class CategorizerService {
           }
         } else if (hasMajorTheatricalStudio) {
           // FALSE POSITIVE CLEANUP: If a movie is a Major Theatrical Studio release (e.g. Warner Bros, Universal, Sony, Disney)
-          // and is NOT a verified streaming original, remove falsely attached streaming platform distributor IDs.
-          const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
-          for (let i = studiosJson.length - 1; i >= 0; i--) {
-            if (streamingPlatformIds.includes(studiosJson[i].id)) {
-              studiosJson.splice(i, 1);
+          // and is NOT a verified streaming original or official TMDB streaming production, remove falsely attached streaming platform distributor IDs.
+          const isOfficialStreamingProducer = tmdbStudios.some((s: any) =>
+            [178464, 185004, 171251, 145174, 198834, 192478, 194232, 20580].includes(s.id)
+          );
+          if (!isOfficialStreamingProducer) {
+            const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
+            for (let i = studiosJson.length - 1; i >= 0; i--) {
+              if (streamingPlatformIds.includes(studiosJson[i].id)) {
+                studiosJson.splice(i, 1);
+              }
             }
           }
         }

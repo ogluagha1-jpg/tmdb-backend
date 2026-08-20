@@ -1030,10 +1030,15 @@ Respond ONLY in valid JSON conforming to this schema:
             }
           } else if (hasMajorTheatricalStudio) {
             // Clean false positive streaming platform distributor tags
-            const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
-            const beforeLen = studios.length;
-            studios = studios.filter((s: any) => !streamingPlatformIds.includes(s.id));
-            if (studios.length !== beforeLen) studiosModified = true;
+            const isOfficialStreamingProducer = studios.some((s: any) =>
+              [178464, 185004, 171251, 145174, 198834, 192478, 194232, 20580].includes(s.id)
+            );
+            if (!isOfficialStreamingProducer) {
+              const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
+              const beforeLen = studios.length;
+              studios = studios.filter((s: any) => !streamingPlatformIds.includes(s.id));
+              if (studios.length !== beforeLen) studiosModified = true;
+            }
           }
         }
 
