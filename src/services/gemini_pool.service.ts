@@ -839,10 +839,11 @@ Respond ONLY in valid JSON conforming to this schema:
     this.isCooperativeScanPaused = false;
     this.cooperativeScanStats = {
       totalGaps: 0,
-      scanned: 0,
+      processed: 0,
       enriched: 0,
       failed: 0,
       currentTitle: 'Initializing cooperative gap scan...',
+      startedAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
     };
 
@@ -852,7 +853,7 @@ Respond ONLY in valid JSON conforming to this schema:
       this.isCooperativeScanning = false;
     });
 
-    return { message: `Cooperative AI Gap-Scan started for up to ${maxTitles} titles on '${table}'.` };
+    return { started: true, message: `Cooperative AI Gap-Scan started for up to ${maxTitles} titles on '${table}'.` };
   }
 
   public pauseCooperativeGapScan(): { message: string } {
