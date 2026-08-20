@@ -1015,12 +1015,26 @@ Respond ONLY in valid JSON conforming to this schema:
             });
             studiosModified = true;
           }
-        } else if (hasMajorTheatricalStudio) {
-          // Clean false positive streaming platform distributor tags
-          const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
-          const beforeLen = studios.length;
-          studios = studios.filter((s: any) => !streamingPlatformIds.includes(s.id));
-          if (studios.length !== beforeLen) studiosModified = true;
+        } else {
+          // ── FOREIGN TITLE DISTRIBUTOR FALSE POSITIVE CLEANUP ──
+          const originalLang = ((movie as any).original_language || 'en').toLowerCase().trim();
+          const isForeignFilm = originalLang !== 'en' && originalLang !== 'ja';
+
+          if (isForeignFilm) {
+            const firstStudio = studios[0];
+            const isLeadMajorStudio = firstStudio && majorTheatricalStudioIds.includes(firstStudio.id);
+            if (!isLeadMajorStudio) {
+              const beforeLen = studios.length;
+              studios = studios.filter((s: any) => !majorTheatricalStudioIds.includes(s.id));
+              if (studios.length !== beforeLen) studiosModified = true;
+            }
+          } else if (hasMajorTheatricalStudio) {
+            // Clean false positive streaming platform distributor tags
+            const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
+            const beforeLen = studios.length;
+            studios = studios.filter((s: any) => !streamingPlatformIds.includes(s.id));
+            if (studios.length !== beforeLen) studiosModified = true;
+          }
         }
 
         // Inject authentic studio if identified by AI and not conflicting

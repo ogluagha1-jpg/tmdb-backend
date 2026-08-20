@@ -256,13 +256,33 @@ export class CategorizerService {
             origin_country: 'US',
           });
         }
-      } else if (hasMajorTheatricalStudio) {
-        // FALSE POSITIVE CLEANUP: If a movie is a Major Theatrical Studio release (e.g. Warner Bros, Universal, Sony, Disney)
-        // and is NOT a verified streaming original, remove falsely attached streaming platform distributor IDs.
-        const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
-        for (let i = studiosJson.length - 1; i >= 0; i--) {
-          if (streamingPlatformIds.includes(studiosJson[i].id)) {
-            studiosJson.splice(i, 1);
+      } else {
+        // ── FOREIGN TITLE DISTRIBUTOR FALSE POSITIVE CLEANUP ──
+        // If a film's original language is non-English (e.g. Hindi, French, Spanish, Russian, Chinese, etc.)
+        // and it is NOT a verified streaming original or Japanese Studio Ghibli film:
+        // TMDB often lists US major studios as local distributors or sales agents rather than production companies.
+        // If the lead studio is foreign, strip trailing US major studio distributor tags so foreign films don't pollute US studio hubs.
+        const originalLang = (tmdbDetails?.original_language || movie.original_language || 'en').toLowerCase().trim();
+        const isForeignFilm = originalLang !== 'en' && originalLang !== 'ja';
+
+        if (isForeignFilm) {
+          const firstStudio = studiosJson[0];
+          const isLeadMajorStudio = firstStudio && majorTheatricalStudioIds.includes(firstStudio.id);
+          if (!isLeadMajorStudio) {
+            for (let i = studiosJson.length - 1; i >= 0; i--) {
+              if (majorTheatricalStudioIds.includes(studiosJson[i].id)) {
+                studiosJson.splice(i, 1);
+              }
+            }
+          }
+        } else if (hasMajorTheatricalStudio) {
+          // FALSE POSITIVE CLEANUP: If a movie is a Major Theatrical Studio release (e.g. Warner Bros, Universal, Sony, Disney)
+          // and is NOT a verified streaming original, remove falsely attached streaming platform distributor IDs.
+          const streamingPlatformIds = [178464, 185004, 171251, 145174, 198834, 192478, 266997, 87858, 194232];
+          for (let i = studiosJson.length - 1; i >= 0; i--) {
+            if (streamingPlatformIds.includes(studiosJson[i].id)) {
+              studiosJson.splice(i, 1);
+            }
           }
         }
       }
