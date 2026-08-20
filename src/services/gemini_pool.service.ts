@@ -813,25 +813,27 @@ Respond ONLY in valid JSON conforming to this schema:
 
   /// ── COOPERATIVE AI GAP-SCANNER ──
   /// Finds movies that missed enrichment during traditional scanning and fills the missing fields via AI
-  public async startCooperativeGapScan(options?: { maxTitles?: number }): Promise<{
+  public startCooperativeGapScan(options?: { maxTitles?: number; table?: string }): {
     started: boolean;
     message: string;
-    totalGaps?: number;
-  }> {
+  } {
     if (this.keyPool.length === 0 && this.groqKeyPool.length === 0) {
       return {
         started: false,
         message: 'No AI keys found. Please add GEMINI_API_KEYS or GROQ_API_KEY in Railway Variables.',
       };
     }
-  public startCooperativeGapScan(maxTitles: number = 200, table: string = 'movies'): { message: string } {
+
     if (this.isCooperativeScanning) {
       if (this.isCooperativeScanPaused) {
         this.isCooperativeScanPaused = false;
-        return { message: 'Cooperative AI Gap-Scan resumed.' };
+        return { started: true, message: 'Cooperative AI Gap-Scan resumed.' };
       }
-      return { message: 'Cooperative AI Gap-Scan already running.' };
+      return { started: false, message: 'Cooperative AI Gap-Scan already running.' };
     }
+
+    const maxTitles = options?.maxTitles || 200;
+    const table = options?.table || 'movies';
 
     this.isCooperativeScanning = true;
     this.isCooperativeScanPaused = false;
