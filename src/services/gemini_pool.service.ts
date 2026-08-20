@@ -824,46 +824,40 @@ Respond ONLY in valid JSON conforming to this schema:
         message: 'No AI keys found. Please add GEMINI_API_KEYS or GROQ_API_KEY in Railway Variables.',
       };
     }
-
-    if (this.isCooperativeScanning && !this.isCooperativeScanPaused) {
-      return { started: false, message: 'Cooperative AI Gap-Scan is already running.' };
-    }
-
-    if (this.isCooperativeScanning && this.isCooperativeScanPaused) {
-      this.isCooperativeScanPaused = false;
-      return { started: true, message: 'Cooperative AI Gap-Scan resumed.' };
+  public startCooperativeGapScan(maxTitles: number = 200, table: string = 'movies'): { message: string } {
+    if (this.isCooperativeScanning) {
+      if (this.isCooperativeScanPaused) {
+        this.isCooperativeScanPaused = false;
+        return { message: 'Cooperative AI Gap-Scan resumed.' };
+      }
+      return { message: 'Cooperative AI Gap-Scan already running.' };
     }
 
     this.isCooperativeScanning = true;
     this.isCooperativeScanPaused = false;
     this.cooperativeScanStats = {
       totalGaps: 0,
-      processed: 0,
+      scanned: 0,
       enriched: 0,
       failed: 0,
-      currentTitle: 'Querying database for missing fields...',
-      startedAt: new Date().toISOString(),
+      currentTitle: 'Initializing cooperative gap scan...',
       lastActiveAt: new Date().toISOString(),
     };
 
-    // Run asynchronously in background
-    this.runCooperativeGapScanLoop(options?.maxTitles || 5000).catch((err) => {
-      console.error('[GEMINI_GAP_SCAN] Critical error in gap scan loop:', err);
+    // Run async in background
+    this.runCooperativeGapScanLoop(maxTitles, table).catch((err) => {
+      console.error('[GEMINI_GAP_SCAN] Error during gap scan loop:', err);
       this.isCooperativeScanning = false;
     });
 
-    return {
-      started: true,
-      message: 'Cooperative AI Gap-Scan launched across database missing records.',
-    };
+    return { message: `Cooperative AI Gap-Scan started for up to ${maxTitles} titles on '${table}'.` };
   }
 
   public pauseCooperativeGapScan(): { message: string } {
     if (!this.isCooperativeScanning) {
-      return { message: 'Cooperative AI Gap-Scan is not running.' };
+      return { message: 'No cooperative gap scan currently running.' };
     }
     this.isCooperativeScanPaused = true;
-    console.log('[GEMINI_GAP_SCAN] ⏸️ Cooperative AI Gap-Scan paused.');
     return { message: 'Cooperative AI Gap-Scan paused.' };
   }
 
@@ -871,11 +865,10 @@ Respond ONLY in valid JSON conforming to this schema:
     this.isCooperativeScanning = false;
     this.isCooperativeScanPaused = false;
     this.cooperativeScanStats.currentTitle = 'Stopped';
-    console.log('[GEMINI_GAP_SCAN] ⏹️ Cooperative AI Gap-Scan stopped.');
     return { message: 'Cooperative AI Gap-Scan stopped.' };
   }
 
-  private async runCooperativeGapScanLoop(maxTitles: number): Promise<void> {
+  private async runCooperativeGapScanLoop(maxTitles: number, targetTable: string = 'movies'): Promise<void> {
     const { SupabaseService } = await import('./supabase.service');
     const supabase = SupabaseService.getClient();
 
@@ -885,13 +878,13 @@ Respond ONLY in valid JSON conforming to this schema:
       return;
     }
 
-    console.log('[GEMINI_GAP_SCAN] 🔍 Fetching movies with missing Arabic or Studio fields...');
+    console.log(`[GEMINI_GAP_SCAN] 🔍 Fetching movies with any missing metadata (translations, studios, keywords) on '${targetTable}'...`);
 
-    // Fetch movies missing title_ar, overview_ar, or studios_json
+    // Fetch movies missing title_ar, overview_ar, tagline_ar, studios_json, or keywords_json
     const { data: gapMovies, error } = await supabase
-      .from('movies')
+      .from(targetTable)
       .select('id, title, tmdb_title, tmdb_id, year, release_date, overview, genres_json, keywords_json, studios_json, title_ar, overview_ar, tagline_ar')
-      .or('title_ar.is.null,overview_ar.is.null,studios_json.is.null,studios_json.eq.[]')
+      .or('title_ar.is.null,overview_ar.is.null,tagline_ar.is.null,studios_json.is.null,studios_json.eq.[],keywords_json.is.null,keywords_json.eq.[]')
       .order('popularity', { ascending: false, nullsFirst: false })
       .limit(maxTitles);
 
@@ -902,7 +895,7 @@ Respond ONLY in valid JSON conforming to this schema:
     }
 
     this.cooperativeScanStats.totalGaps = gapMovies.length;
-    console.log(`[GEMINI_GAP_SCAN] 🎯 Identified ${gapMovies.length} movies requiring cooperative AI gap filling.`);
+    console.log(`[GEMINI_GAP_SCAN] 🎯 Identified ${gapMovies.length} movies requiring cooperative AI gap filling on '${targetTable}'.`);
 
     for (let i = 0; i < gapMovies.length; i++) {
       if (!this.isCooperativeScanning) {
@@ -1079,7 +1072,7 @@ Respond ONLY in valid JSON conforming to this schema:
         if (Object.keys(updatePayload).length > 0) {
           updatePayload.enriched_at = new Date().toISOString();
           let { error: updErr } = await supabase
-            .from('movies')
+            .from(targetTable)
             .update(updatePayload)
             .eq('id', movie.id);
 
@@ -1087,7 +1080,7 @@ Respond ONLY in valid JSON conforming to this schema:
           if (updErr && /ai_model/i.test(updErr.message)) {
             delete updatePayload.ai_model;
             const retryRes = await supabase
-              .from('movies')
+              .from(targetTable)
               .update(updatePayload)
               .eq('id', movie.id);
             updErr = retryRes.error;
